@@ -1,0 +1,134 @@
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Theme Variables */
+:root {
+  --primary-color: #667eea;
+  --secondary-color: #764ba2;
+  --success-color: #27ae60;
+  --warning-color: #f39c12;
+  --danger-color: #e74c3c;
+  --dark-bg: #2c3e50;
+  --light-text: #ecf0f1;
+}
+
+/* Slot Machine Themes */
+.theme-classic {
+  --slot-bg: linear-gradient(145deg, #c0392b, #e74c3c);
+  --slot-border: #f39c12;
+  --symbol-bg: #ecf0f1;
+}
+
+.theme-neon {
+  --slot-bg: linear-gradient(145deg, #8e44ad, #9b59b6);
+  --slot-border: #e91e63;
+  --symbol-bg: #1a1a2e;
+}
+
+.theme-gold {
+  --slot-bg: linear-gradient(145deg, #f39c12, #f1c40f);
+  --slot-border: #d4af37;
+  --symbol-bg: #2c3e50;
+}
+
+.theme-ocean {
+  --slot-bg: linear-gradient(145deg, #2980b9, #3498db);
+  --slot-border: #1abc9c;
+  --symbol-bg: #ecf0f1;
+}
+
+/* Animations */
+@keyframes spin {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700;
+  }
+  50% {
+    box-shadow: 0 0 20px #ffd700, 0 0 40px #ffd700, 0 0 60px #ffd700;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Utility Classes */
+.spinning {
+  animation: spin 0.1s linear infinite;
+}
+
+.winning {
+  animation: glow 1s ease-in-out infinite;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #34495e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #764ba2;
+}

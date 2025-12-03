@@ -21,39 +21,36 @@ export const register = async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user and wallet in a transaction
-    const user: any = await (prisma.$transaction as any)(async (tx: any) => {
-      const newUser = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          displayName,
-          role: 'PLAYER',
-          status: 'ACTIVE',
-        },
-      });
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        displayName,
+        role: 'PLAYER',
+        status: 'ACTIVE',
+      },
+    });
 
-      await tx.wallet.create({
-        data: {
-          userId: newUser.id,
-          balance: parseInt(process.env.DEFAULT_STARTING_BALANCE || '10000'),
-          currency: 'COINS',
-        },
-      });
-
-      return newUser;
+    // Create wallet
+    await prisma.wallet.create({
+      data: {
+        userId: newUser.id,
+        balance: parseInt(process.env.DEFAULT_STARTING_BALANCE || '10000'),
+        currency: 'COINS',
+      },
     });
 
     // Generate tokens
-    const accessToken = generateAccessToken({ userId: user.id, email: user.email, role: user.role });
-    const refreshToken = generateRefreshToken({ userId: user.id, email: user.email, role: user.role });
+    const accessToken = generateAccessToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
+    const refreshToken = generateRefreshToken({ userId: newUser.id, email: newUser.email, role: newUser.role });
 
     // Store refresh token
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
     await prisma.session.create({
       data: {
-        userId: user.id,
+        userId: newUser.id,
         refreshToken,
         expiresAt,
       },
@@ -62,10 +59,10 @@ export const register = async (req: Request, res: Response) => {
     res.status(201).json({
       message: 'User registered successfully',
       user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
+        id: newUser.id,
+        email: newUser.email,
+        displayName: newUser.displayName,
+        role: newUser.role,
       },
       accessToken,
       refreshToken,

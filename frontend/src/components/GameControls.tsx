@@ -1,11 +1,11 @@
-import React, { useContext } from 'react';
-import { ThemeContext } from '../contexts/ThemeContext';
+import React from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
 const GameControls: React.FC<{ onSpin: () => void; betAmount: number; setBetAmount: (amount: number) => void; }> = ({ onSpin, betAmount, setBetAmount }) => {
-    const { currentTheme } = useContext(ThemeContext);
+    const { theme } = useTheme();
 
     return (
-        <div className={`game-controls ${currentTheme}`}>
+        <div className={`game-controls ${theme}`}>
             <div className="bet-settings">
                 <label htmlFor="bet-amount">Bet Amount:</label>
                 <input
