@@ -1,6 +1,19 @@
 import prisma from '../config/db';
 import { TransactionType } from '@prisma/client';
 
+// Import socketService - will be lazy loaded to avoid circular dependency
+let socketService: any = null;
+const getSocketService = () => {
+  if (!socketService) {
+    try {
+      socketService = require('../app').socketService;
+    } catch (e) {
+      // Socket service not available yet
+    }
+  }
+  return socketService;
+};
+
 export interface WalletTransaction {
   userId: string;
   amount: number;
@@ -69,6 +82,17 @@ export async function executeTransaction(transaction: WalletTransaction): Promis
         adminId: transaction.adminId,
       },
     });
+    
+    // Emit balance update via Socket.IO
+    const socket = getSocketService();
+    if (socket) {
+      socket.emitBalanceUpdate(transaction.userId, newBalance, {
+        id: txRecord.id,
+        amount: transaction.amount,
+        type: transaction.type,
+        reason: transaction.reason,
+      });
+    }
     
     return {
       newBalance,

@@ -12,20 +12,21 @@ datasource db {
 }
 
 model User {
-  id                String        @id @default(uuid())
-  email             String        @unique
+  id                String              @id @default(uuid())
+  email             String              @unique
   passwordHash      String
   displayName       String
   role              UserRole
-  createdAt         DateTime      @default(now())
+  createdAt         DateTime            @default(now())
   lastLogin         DateTime?
-  status            UserStatus    @default(ACTIVE)
+  status            UserStatus          @default(ACTIVE)
   wallets           Wallet[]
   transactions      Transaction[]
   spins             Spin[]
-  adminLogs         AdminLog[]    @relation("AdminUserLogs")
-  adminTransactions Transaction[] @relation("AdminUser")
+  adminLogs         AdminLog[]          @relation("AdminUserLogs")
+  adminTransactions Transaction[]       @relation("AdminUser")
   sessions          Session[]
+  achievements      UserAchievement[]
 }
 
 enum UserRole {
@@ -158,4 +159,67 @@ model Session {
   refreshToken String
   createdAt    DateTime @default(now())
   expiresAt    DateTime
+}
+
+model Achievement {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  name        String
+  description String
+  icon        String
+  requirement Json // { type: "spins", count: 100 } or { type: "total_wins", amount: 1000 }
+  reward      Int // bonus coins
+  category    String // "gameplay", "wins", "milestones"
+  createdAt   DateTime          @default(now())
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  user          User        @relation(fields: [userId], references: [id])
+  userId        String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+  progress      Int         @default(0)
+
+  @@unique([userId, achievementId])
+}
+
+model Leaderboard {
+  id        String           @id @default(uuid())
+  type      LeaderboardType
+  period    LeaderboardPeriod
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime         @default(now())
+  entries   LeaderboardEntry[]
+}
+
+enum LeaderboardType {
+  TOTAL_WINS
+  BIGGEST_WIN
+  MOST_SPINS
+  HIGHEST_BALANCE
+}
+
+enum LeaderboardPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
+
+model LeaderboardEntry {
+  id            String      @id @default(uuid())
+  leaderboard   Leaderboard @relation(fields: [leaderboardId], references: [id])
+  leaderboardId String
+  userId        String
+  userEmail     String
+  displayName   String
+  score         Int
+  rank          Int
+  createdAt     DateTime    @default(now())
+
+  @@unique([leaderboardId, userId])
 }

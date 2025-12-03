@@ -3,15 +3,21 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import prisma, { connectDatabase } from './config/db';
 import authRoutes from './routes/authRoutes';
 import slotRoutes from './routes/slotRoutes';
 import adminRoutes from './routes/adminRoutes';
+import reportRoutes from './routes/reportRoutes';
+import exportRoutes from './routes/exportRoutes';
+import gamificationRoutes from './routes/gamificationRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { globalLimiter } from './middleware/rateLimiter';
 import { getMetrics } from './utils/metrics';
+import SocketService from './services/socketService';
 
 // Load environment variables
 dotenv.config();
@@ -44,30 +50,26 @@ app.get('/health', (req, res) => {
 // Metrics endpoint for Prometheus
 app.get('/metrics', getMetrics);
 
+// Serve static uploaded files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', slotRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/reports', reportRoutes);
+app.use('/api/admin/export', exportRoutes);
+app.use('/api/admin/upload', uploadRoutes);
+app.use('/api/gamification', gamificationRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Socket.IO for real-time updates
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+// Initialize Socket.IO service
+const socketService = new SocketService(io);
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-
-  // Room-based updates for authenticated users
-  socket.on('join', (userId: string) => {
-    socket.join(`user_${userId}`);
-  });
-});
-
-// Export io for use in other modules
-export { io };
+// Export io and socketService for use in other modules
+export { io, socketService };
 
 // Start server
 async function startServer() {

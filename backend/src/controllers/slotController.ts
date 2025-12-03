@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import prisma from '../config/db';
 import { executeSpin, replaySpin, ThemeConfig } from '../services/slotEngine';
 import { executeSpinTransaction, getBalance } from '../services/walletService';
+import { checkAndUnlockAchievements } from '../services/achievementService';
 
 /**
  * POST /api/spin - Execute a slot machine spin
@@ -73,6 +74,9 @@ export const spin = async (req: AuthRequest, res: Response) => {
       spinLog.id
     );
 
+    // Check and unlock achievements after spin
+    const unlockedAchievements = await checkAndUnlockAchievements(userId);
+
     // Return result to client
     res.json({
       spinId: spinLog.id,
@@ -83,6 +87,7 @@ export const spin = async (req: AuthRequest, res: Response) => {
       bonusTriggered: spinResult.bonusTriggered,
       jackpotWon: spinResult.jackpotWon,
       auditId: spinLog.id,
+      achievements: unlockedAchievements.length > 0 ? unlockedAchievements : undefined,
     });
   } catch (error: any) {
     console.error('Spin error:', error);

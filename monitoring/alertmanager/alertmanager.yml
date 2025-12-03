@@ -1,0 +1,119 @@
+global:
+  resolve_timeout: 5m
+  smtp_from: 'alerts@slotgame.com'
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'your-app-password'
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert distribution
+route:
+  group_by: ['alertname', 'category', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-team'
+      continue: true
+      group_wait: 0s
+      repeat_interval: 5m
+
+    # RTP alerts - finance team
+    - match:
+        category: rtp
+      receiver: 'finance-team'
+      continue: true
+
+    # Security alerts - security team
+    - match_re:
+        category: security|auth
+      receiver: 'security-team'
+      continue: true
+
+    # Performance alerts - devops team
+    - match_re:
+        category: performance|system|database
+      receiver: 'devops-team'
+
+    # Business alerts - management
+    - match_re:
+        category: business|revenue|compliance
+      receiver: 'management-team'
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Suppress non-critical alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match_re:
+      severity: 'warning|info'
+    equal: ['alertname']
+
+  # Suppress high error rate when service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      alertname: 'HighErrorRate'
+
+# Receivers - notification destinations
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'oncall@slotgame.com'
+        headers:
+          Subject: '[Slot Game Alert] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+
+  - name: 'critical-team'
+    email_configs:
+      - to: 'critical@slotgame.com'
+        send_resolved: true
+        headers:
+          Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+        channel: '#critical-alerts'
+        title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+    webhook_configs:
+      - url: 'http://backend:3000/api/admin/alerts/webhook'
+        send_resolved: true
+
+  - name: 'finance-team'
+    email_configs:
+      - to: 'finance@slotgame.com'
+        headers:
+          Subject: '[Finance Alert] {{ .GroupLabels.alertname }}'
+
+  - name: 'security-team'
+    email_configs:
+      - to: 'security@slotgame.com'
+        headers:
+          Subject: '[Security Alert] {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+        channel: '#security-alerts'
+
+  - name: 'devops-team'
+    email_configs:
+      - to: 'devops@slotgame.com'
+        headers:
+          Subject: '[DevOps Alert] {{ .GroupLabels.alertname }}'
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'management-team'
+    email_configs:
+      - to: 'management@slotgame.com'
+        headers:
+          Subject: '[Business Alert] {{ .GroupLabels.alertname }}'
