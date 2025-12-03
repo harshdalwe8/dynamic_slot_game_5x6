@@ -1,0 +1,161 @@
+// Prisma schema for Dynamic Multi-Theme 5x6 Slot Game System
+// This schema covers all required tables and relations per requirements
+// Run `npx prisma migrate dev` after editing
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String        @id @default(uuid())
+  email             String        @unique
+  passwordHash      String
+  displayName       String
+  role              UserRole
+  createdAt         DateTime      @default(now())
+  lastLogin         DateTime?
+  status            UserStatus    @default(ACTIVE)
+  wallets           Wallet[]
+  transactions      Transaction[]
+  spins             Spin[]
+  adminLogs         AdminLog[]    @relation("AdminUserLogs")
+  adminTransactions Transaction[] @relation("AdminUser")
+  sessions          Session[]
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  GAME_MANAGER
+  SUPPORT_STAFF
+  PLAYER
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  DISABLED
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique
+  balance   Int // in coins
+  currency  String   @default("COINS")
+  updatedAt DateTime @updatedAt
+  // No direct relation to Transaction; transactions reference user
+}
+
+model Transaction {
+  id           String          @id @default(uuid())
+  user         User            @relation(fields: [userId], references: [id])
+  userId       String
+  amount       Int
+  type         TransactionType
+  balanceAfter Int
+  reference    String?
+  reason       String
+  createdAt    DateTime        @default(now())
+  admin        User?           @relation("AdminUser", fields: [adminId], references: [id])
+  adminId      String?
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  COUPON
+  REFERRAL
+  MANUAL
+  SPIN
+  WIN
+  BONUS
+  JACKPOT
+}
+
+model Theme {
+  id            String         @id @default(uuid())
+  name          String
+  version       Int
+  status        ThemeStatus
+  jsonSchema    Json
+  assetManifest Json
+  createdBy     String
+  createdAt     DateTime       @default(now())
+  versions      ThemeVersion[]
+  paylines      Payline[]
+  spins         Spin[]
+  rtpSnapshots  RTPSnapshot[]
+}
+
+enum ThemeStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+}
+
+model ThemeVersion {
+  id        String   @id @default(uuid())
+  theme     Theme    @relation(fields: [themeId], references: [id])
+  themeId   String
+  version   Int
+  json      Json
+  assets    Json
+  createdAt DateTime @default(now())
+  notes     String?
+}
+
+model Spin {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  theme        Theme    @relation(fields: [themeId], references: [id])
+  themeId      String
+  betAmount    Int
+  resultMatrix Json
+  winAmount    Int
+  seed         String
+  rtpApplied   Float
+  createdAt    DateTime @default(now())
+}
+
+model Payline {
+  id         String @id @default(uuid())
+  theme      Theme  @relation(fields: [themeId], references: [id])
+  themeId    String
+  definition Json
+}
+
+model AdminLog {
+  id         String   @id @default(uuid())
+  admin      User     @relation("AdminUserLogs", fields: [adminId], references: [id])
+  adminId    String
+  action     String
+  objectType String
+  objectId   String
+  payload    Json
+  createdAt  DateTime @default(now())
+  ip         String
+}
+
+model RTPSnapshot {
+  id            String   @id @default(uuid())
+  theme         Theme    @relation(fields: [themeId], references: [id])
+  themeId       String
+  calculatedRTP Float
+  windowStart   DateTime
+  windowEnd     DateTime
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  refreshToken String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+}
