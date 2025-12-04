@@ -1,0 +1,375 @@
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Create axios instance with auth interceptor
+const adminApi = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+// Request interceptor to add token
+adminApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor for token refresh
+adminApi.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+          localStorage.setItem('accessToken', data.accessToken);
+          localStorage.setItem('refreshToken', data.refreshToken);
+          originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+          return adminApi(originalRequest);
+        } catch (refreshError) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          window.location.href = '/admin/login';
+          return Promise.reject(refreshError);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ============= THEME MANAGEMENT =============
+
+export interface Theme {
+  id: string;
+  name: string;
+  status: 'DRAFT' | 'ACTIVE' | 'DISABLED';
+  version: number;
+  configuration: any;
+  minBet: number;
+  maxBet: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateThemeRequest {
+  name: string;
+  configuration: any;
+  minBet: number;
+  maxBet: number;
+  status?: 'DRAFT' | 'ACTIVE';
+}
+
+export interface UpdateThemeRequest {
+  name?: string;
+  configuration?: any;
+  minBet?: number;
+  maxBet?: number;
+  notes?: string;
+}
+
+export const getAllThemes = async (status?: 'DRAFT' | 'ACTIVE' | 'DISABLED') => {
+  const params = status ? { status } : {};
+  const response = await adminApi.get('/admin/themes', { params });
+  return response.data;
+};
+
+export const getThemeDetails = async (themeId: string) => {
+  const response = await adminApi.get(`/admin/themes/${themeId}`);
+  return response.data;
+};
+
+export const createTheme = async (themeData: CreateThemeRequest) => {
+  const response = await adminApi.post('/admin/themes', themeData);
+  return response.data;
+};
+
+export const updateTheme = async (themeId: string, themeData: UpdateThemeRequest) => {
+  const response = await adminApi.put(`/admin/themes/${themeId}`, themeData);
+  return response.data;
+};
+
+export const activateTheme = async (themeId: string) => {
+  const response = await adminApi.post(`/admin/themes/${themeId}/activate`);
+  return response.data;
+};
+
+export const deactivateTheme = async (themeId: string) => {
+  const response = await adminApi.post(`/admin/themes/${themeId}/deactivate`);
+  return response.data;
+};
+
+export const rollbackTheme = async (themeId: string, targetVersion: number) => {
+  const response = await adminApi.post(`/admin/themes/${themeId}/rollback`, { targetVersion });
+  return response.data;
+};
+
+export const deleteTheme = async (themeId: string) => {
+  const response = await adminApi.delete(`/admin/themes/${themeId}`);
+  return response.data;
+};
+
+// ============= FILE UPLOAD =============
+
+export const uploadThemeAssets = async (themeId: string, files: File[]) => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append('assets', file);
+  });
+  const response = await adminApi.post(`/admin/upload/theme-assets/${themeId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const uploadThemeJSON = async (file: File) => {
+  const formData = new FormData();
+  formData.append('theme', file);
+  const response = await adminApi.post('/admin/upload/theme-json', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const uploadImage = async (file: File) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await adminApi.post('/admin/upload/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const listAllAssets = async () => {
+  const response = await adminApi.get('/admin/upload/assets');
+  return response.data;
+};
+
+export const listThemeAssets = async (themeId: string) => {
+  const response = await adminApi.get(`/admin/upload/theme-assets/${themeId}`);
+  return response.data;
+};
+
+export const deleteAsset = async (filename: string) => {
+  const response = await adminApi.delete(`/admin/upload/asset/${filename}`);
+  return response.data;
+};
+
+// ============= REPORTS =============
+
+export interface RTPReportParams {
+  themeId?: string;
+  startDate?: string;
+  endDate?: string;
+  period?: 'daily' | 'weekly' | 'monthly';
+}
+
+export interface SpinReportParams {
+  userId?: string;
+  themeId?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface UserReportParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface TransactionReportParams {
+  userId?: string;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const getRTPReport = async (params: RTPReportParams) => {
+  const response = await adminApi.get('/admin/reports/rtp', { params });
+  return response.data;
+};
+
+export const getAllThemesRTP = async () => {
+  const response = await adminApi.get('/admin/reports/rtp/all');
+  return response.data;
+};
+
+export const getThemeRTPHistory = async (themeId: string, limit: number = 100) => {
+  const response = await adminApi.get(`/admin/reports/rtp/history/${themeId}`, {
+    params: { limit },
+  });
+  return response.data;
+};
+
+export const getSpinLogsReport = async (params: SpinReportParams) => {
+  const response = await adminApi.get('/admin/reports/spins', { params });
+  return response.data;
+};
+
+export const getUserActivityReport = async (params: UserReportParams) => {
+  const response = await adminApi.get('/admin/reports/users', { params });
+  return response.data;
+};
+
+export const getTransactionReport = async (params: TransactionReportParams) => {
+  const response = await adminApi.get('/admin/reports/transactions', { params });
+  return response.data;
+};
+
+export const getThemePerformance = async (startDate?: string, endDate?: string) => {
+  const params = { startDate, endDate };
+  const response = await adminApi.get('/admin/reports/themes', { params });
+  return response.data;
+};
+
+export const getAdminLogs = async (
+  adminId?: string,
+  action?: string,
+  limit: number = 50,
+  offset: number = 0
+) => {
+  const params = { adminId, action, limit, offset };
+  const response = await adminApi.get('/admin/reports/admin-logs', { params });
+  return response.data;
+};
+
+// ============= EXPORT =============
+
+export const exportSpinsCSV = async (
+  userId?: string,
+  themeId?: string,
+  startDate?: string,
+  endDate?: string
+) => {
+  const params = { userId, themeId, startDate, endDate };
+  const response = await adminApi.get('/admin/export/spins', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const exportTransactionsCSV = async (
+  userId?: string,
+  type?: string,
+  startDate?: string,
+  endDate?: string
+) => {
+  const params = { userId, type, startDate, endDate };
+  const response = await adminApi.get('/admin/export/transactions', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const exportUsersCSV = async (
+  role?: string,
+  status?: string,
+  startDate?: string,
+  endDate?: string
+) => {
+  const params = { role, status, startDate, endDate };
+  const response = await adminApi.get('/admin/export/users', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const exportRTPCSV = async (startDate?: string, endDate?: string) => {
+  const params = { startDate, endDate };
+  const response = await adminApi.get('/admin/export/rtp', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+export const exportAdminLogsCSV = async (
+  adminId?: string,
+  action?: string,
+  startDate?: string,
+  endDate?: string
+) => {
+  const params = { adminId, action, startDate, endDate };
+  const response = await adminApi.get('/admin/export/admin-logs', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+// ============= GAMIFICATION ADMIN =============
+
+export interface CreateAchievementRequest {
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  rewardAmount: number;
+  requirementType: string;
+  requirementValue: number;
+  category: string;
+}
+
+export const getAchievementStats = async () => {
+  const response = await adminApi.get('/gamification/admin/achievements/stats');
+  return response.data;
+};
+
+export const createAchievement = async (data: CreateAchievementRequest) => {
+  const response = await adminApi.post('/gamification/admin/achievements', data);
+  return response.data;
+};
+
+export const deleteAchievement = async (id: string) => {
+  const response = await adminApi.delete(`/gamification/admin/achievements/${id}`);
+  return response.data;
+};
+
+export const generateLeaderboard = async (type: string, period: string) => {
+  const response = await adminApi.post('/gamification/admin/leaderboards/generate', {
+    type,
+    period,
+  });
+  return response.data;
+};
+
+export const refreshLeaderboards = async () => {
+  const response = await adminApi.post('/gamification/admin/leaderboards/refresh');
+  return response.data;
+};
+
+// ============= SPIN AUDIT =============
+
+export const auditSpin = async (spinId: string) => {
+  const response = await adminApi.get(`/spin/audit/${spinId}`);
+  return response.data;
+};
+
+// Helper function to download CSV blob
+export const downloadCSV = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export default adminApi;

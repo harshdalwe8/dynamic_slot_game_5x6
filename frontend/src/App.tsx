@@ -1,9 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
 import SlotMachine from './components/SlotMachine';
-import ThemeSelector from './components/ThemeSelector';
 import Login from './components/Login';
 import Register from './components/Register';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import styled from 'styled-components';
@@ -24,6 +25,33 @@ const ProtectedRoute: React.FC<{ component: React.ComponentType<any>; path: stri
       {...rest}
       render={(props) =>
         isAuthenticated ? <Component /> : <Redirect to="/login" />
+      }
+    />
+  );
+};
+
+// Admin Protected Route Component
+const AdminRoute: React.FC<{ component: React.ComponentType<any>; path: string; exact?: boolean }> = ({
+  component: Component,
+  ...rest
+}) => {
+  const { isAuthenticated, user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen>Loading...</LoadingScreen>;
+  }
+
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'GAME_MANAGER' || user?.role === 'SUPPORT_STAFF';
+
+  return (
+    <Route
+      {...rest}
+      render={(props) =>
+        isAuthenticated && isAdmin ? (
+          <Component />
+        ) : (
+          <Redirect to="/admin/login" />
+        )
       }
     />
   );
@@ -61,9 +89,20 @@ const App: React.FC = () => {
       <ThemeProvider>
         <Router>
           <Switch>
+            {/* Player Routes */}
             <Route path="/login" exact component={Login} />
             <Route path="/register" exact component={Register} />
             <ProtectedRoute path="/game" component={GamePage} />
+
+            {/* Admin Routes */}
+            <Route path="/admin/login" exact component={AdminLogin} />
+            <AdminRoute path="/admin/dashboard" exact component={AdminDashboard} />
+            <AdminRoute path="/admin/themes" exact component={AdminDashboard} />
+            <AdminRoute path="/admin/users" exact component={AdminDashboard} />
+            <AdminRoute path="/admin/reports" exact component={AdminDashboard} />
+            <AdminRoute path="/admin/settings" exact component={AdminDashboard} />
+
+            {/* Default Redirect */}
             <Route path="/" exact>
               <Redirect to="/login" />
             </Route>

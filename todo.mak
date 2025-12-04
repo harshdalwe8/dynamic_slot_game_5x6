@@ -68,7 +68,7 @@ Authentication middleware complete
 6. Frontend: Player UI - 0%
 ✅ Login/registration UI
 ❌ Social login (Google/Facebook)
-✅ Guest mode
+❌ Guest mode
 ❌ Wallet display
 ❌ Theme selection UI
 ❌ 5×6 slot grid with animations

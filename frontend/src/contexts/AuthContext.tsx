@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { loginUser, registerUser, refreshAccessToken } from '../services/api';
+import { loginUser, registerUser, refreshAccessToken } from '../services/authApi';
 
 interface User {
   id: string;
   email: string;
-  role: 'USER' | 'ADMIN';
+  displayName?: string;
+  role: 'PLAYER' | 'SUPER_ADMIN' | 'GAME_MANAGER' | 'SUPPORT_STAFF';
   isGuest?: boolean;
 }
 
@@ -62,11 +63,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!authState.refreshToken) return;
 
-    const interval = setInterval(async () => {
-      await refreshAuth();
-    }, 13 * 60 * 1000); // 13 minutes
+    const refreshAuthToken = async () => {
+      try {
+        const response = await refreshAccessToken(authState.refreshToken!);
+        const { accessToken } = response;
+
+        // Update access token
+        localStorage.setItem('accessToken', accessToken);
+
+        setAuthState((prev) => ({
+          ...prev,
+          accessToken,
+        }));
+      } catch (error) {
+        // Refresh failed, logout user
+        logout();
+      }
+    };
+
+    const interval = setInterval(refreshAuthToken, 13 * 60 * 1000); // 13 minutes
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState.refreshToken]);
 
   const login = async (email: string, password: string) => {

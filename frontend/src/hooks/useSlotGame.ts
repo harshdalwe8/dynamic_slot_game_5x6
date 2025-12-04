@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getThemes, spinSlot } from '../services/api';
+import { getActiveThemes, spinSlot } from '../services/playerApi';
 
 interface Theme {
     id: string;
@@ -25,9 +25,12 @@ const useSlotGame = () => {
     useEffect(() => {
         const loadThemes = async () => {
             try {
-                const fetchedThemes = await getThemes();
+                const data = await getActiveThemes();
+                const fetchedThemes = data.themes || [];
                 setThemes(fetchedThemes);
-                setSelectedTheme(fetchedThemes[0]); // Set default theme
+                if (fetchedThemes.length > 0) {
+                    setSelectedTheme(fetchedThemes[0]); // Set default theme
+                }
             } catch (error) {
                 console.error('Error fetching themes:', error);
             }
@@ -41,7 +44,7 @@ const useSlotGame = () => {
         
         setGameState({ ...gameState, isSpinning: true, error: null });
         try {
-            const result = await spinSlot(betAmount, selectedTheme.id);
+            const result = await spinSlot(selectedTheme.id, betAmount);
             setGameState({ isSpinning: false, result, error: null });
         } catch (error) {
             setGameState({ isSpinning: false, result: null, error: 'Spin failed. Please try again.' });

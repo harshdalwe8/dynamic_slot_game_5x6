@@ -1,28 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { spinSlot, getWalletBalance } from '../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { spinSlot, getWalletBalance, getActiveThemes, Theme } from '../services/playerApi';
 import { useAuth } from '../contexts/AuthContext';
 import styled, { keyframes } from 'styled-components';
 
-interface Symbol {
-  id: string;
-  name: string;
-  image?: string;
-  emoji?: string;
-}
-
-interface SpinResult {
-  grid: string[][];
-  win: number;
-  balance: number;
-  winningLines?: Array<{
-    positions: Array<{ row: number; col: number }>;
-    symbol: string;
-    multiplier: number;
-  }>;
-}
-
 const SlotMachine: React.FC = () => {
-  const { user } = useAuth();
+  useAuth();
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [grid, setGrid] = useState<string[][]>([]);
   const [balance, setBalance] = useState<number>(0);
   const [betAmount, setBetAmount] = useState<number>(10);
@@ -32,16 +16,10 @@ const SlotMachine: React.FC = () => {
   const [showWinMessage, setShowWinMessage] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Default symbols (will be replaced with theme symbols)
-  const defaultSymbols = ['🍒', '🍋', '🍊', '🍇', '🍉', '💎', '⭐', '7️⃣'];
+  // Default symbols (memoized to prevent re-renders)
+  const defaultSymbols = React.useMemo(() => ['🍒', '🍋', '🍊', '🍇', '🍉', '💎', '⭐', '7️⃣'], []);
 
-  // Initialize empty grid
-  useEffect(() => {
-    initializeGrid();
-    fetchBalance();
-  }, []);
-
-  const initializeGrid = () => {
+  const initializeGrid = useCallback(() => {
     const emptyGrid: string[][] = [];
     for (let row = 0; row < 6; row++) {
       const rowData: string[] = [];
@@ -51,16 +29,35 @@ const SlotMachine: React.FC = () => {
       emptyGrid.push(rowData);
     }
     setGrid(emptyGrid);
-  };
+  }, [defaultSymbols]);
 
-  const fetchBalance = async () => {
+  const loadThemes = useCallback(async () => {
+    try {
+      const data = await getActiveThemes();
+      if (data.themes && data.themes.length > 0) {
+        setThemes(data.themes);
+        setSelectedTheme(data.themes[0]);
+      }
+    } catch (err) {
+      console.error('Failed to load themes:', err);
+    }
+  }, []);
+
+  const fetchBalance = useCallback(async () => {
     try {
       const response = await getWalletBalance();
       setBalance(response.balance);
     } catch (err) {
       console.error('Failed to fetch balance:', err);
     }
-  };
+  }, []);
+
+  // Initialize empty grid and load themes
+  useEffect(() => {
+    initializeGrid();
+    fetchBalance();
+    loadThemes();
+  }, [initializeGrid, fetchBalance, loadThemes]);
 
   const handleSpin = async () => {
     if (isSpinning) return;
@@ -83,21 +80,27 @@ const SlotMachine: React.FC = () => {
       // Start spinning animation
       await animateSpinning();
 
-      // Call backend API
-      const result: SpinResult = await spinSlot(betAmount);
+      // Call backend API with themeId
+      const themeId = selectedTheme?.id || themes[0]?.id;
+      if (!themeId) {
+        throw new Error('No theme selected');
+      }
+      const spinResult = await spinSlot(themeId, betAmount);
 
       // Update grid with result
-      setGrid(result.grid);
-      setBalance(result.balance);
-      setLastWin(result.win);
+      setGrid(spinResult.result);
+      setBalance(spinResult.balance);
+      setLastWin(spinResult.winAmount);
 
       // Highlight winning positions
-      if (result.winningLines && result.winningLines.length > 0) {
+      if (spinResult.winningLines && spinResult.winningLines.length > 0) {
         const positions = new Set<string>();
-        result.winningLines.forEach((line) => {
-          line.positions.forEach((pos) => {
-            positions.add(`${pos.row}-${pos.col}`);
-          });
+        spinResult.winningLines.forEach((line: any) => {
+          if (line.positions) {
+            line.positions.forEach((pos: any) => {
+              positions.add(`${pos.row}-${pos.col}`);
+            });
+          }
         });
         setWinningPositions(positions);
         setShowWinMessage(true);
