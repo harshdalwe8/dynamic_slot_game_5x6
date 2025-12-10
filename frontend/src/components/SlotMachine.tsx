@@ -1,23 +1,510 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { spinSlot, getWalletBalance, getActiveThemes, Theme } from '../services/playerApi';
-import { useAuth } from '../contexts/AuthContext';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 
+// ============= KEYFRAME ANIMATIONS =============
+const spinAnimation = keyframes`
+  0% { filter: blur(0px); }
+  50% { filter: blur(4px); }
+  100% { filter: blur(0px); }
+`;
+
+const pop = keyframes`
+  from { transform: scale(0.95); }
+  to { transform: scale(1.05); }
+`;
+
+const pulse = keyframes`
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(255, 215, 0, 1); }
+`;
+
+const glow = keyframes`
+  0%, 100% { 
+    box-shadow: 0 0 10px #ffd700, inset 0 0 10px red;
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 20px #ffd700, inset 0 0 20px red;
+    transform: scale(1.05);
+  }
+`;
+
+// ============= STYLED COMPONENTS =============
+const GameWrapper = styled.div`
+  /* Ensure the game occupies the full viewport and prevents body scrolling */
+  width: 80%;
+  height: 85vh;
+  max-width: 80vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px;
+  position: relative;
+  background-color: #0a0a2a;
+  background-image: radial-gradient(circle at 50% 50%, #2b2b60 0%, #050510 100%);
+  overflow: hidden; /* prevent page scroll */
+  box-sizing: border-box;
+  font-family: 'Roboto', 'Titan One', sans-serif;
+  --header-h: 67px; /* approximate header height */
+  --footer-h: 88px; /* approximate footer height */
+`;
+
+const Header = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 0 5px;
+  z-index: 2;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+  }
+`;
+
+const DisplayBox = styled.div`
+  background: linear-gradient(to bottom, #4d4dff, #000099);
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  min-width: 90px;
+  text-align: center;
+  padding: 4px;
+  box-shadow: 0 4px 5px rgba(0, 0, 0, 0.5);
+`;
+
+const Label = styled.div`
+  color: #ffcc00;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+`;
+
+const ValueBox = styled.div`
+  background-color: black;
+  color: #00ff00;
+  font-family: 'Titan One', cursive;
+  font-size: 1rem;
+  border-radius: 4px;
+  padding: 2px 5px;
+  border: 1px solid #333;
+  font-weight: bold;
+`;
+
+const TitleArea = styled.div`
+  text-align: center;
+  flex-grow: 1;
+  white-space: nowrap;
+
+  @media (max-width: 480px) {
+    width: 100%;
+    order: -1;
+    margin-bottom: 5px;
+  }
+`;
+
+const GameTitle = styled.h1`
+  font-family: 'Titan One', cursive;
+  font-size: 2.2rem;
+  color: #ffcc00;
+  text-shadow: 0 0 5px #000, 3px 3px 0 #003366;
+  margin: 0 10px;
+  letter-spacing: 2px;
+
+  @media (max-width: 480px) {
+    font-size: 1.5rem;
+  }
+`;
+
+const Stars = styled.span`
+  color: #aaaaff;
+  font-size: 1rem;
+  text-shadow: 0 0 5px white;
+  display: inline-block;
+  margin: 0 5px;
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+`;
+
+const MenuBtn = styled.button`
+  background: linear-gradient(to bottom, #4d4dff, #000099);
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  padding: 8px 15px;
+  color: #ffff00;
+  font-weight: 900;
+  cursor: pointer;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 5px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
+const MainPlayArea = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex: 1 1 auto;
+  gap: 10px;
+  /* Fit the available space between header and footer */
+  max-height: calc(100vh - var(--header-h) - var(--footer-h) - 24px);
+  height: calc(100vh - var(--header-h) - var(--footer-h) - 24px);
+
+  @media (max-width: 480px) {
+    max-height: calc(100vh - var(--header-h) - var(--footer-h) - 12px);
+  }
+
+  @media (max-height: 500px) {
+    max-height: calc(100vh - var(--header-h) - 60px);
+  }
+`;
+
+const SideChips = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 100%;
+  padding: 10px 0;
+
+  @media (max-width: 768px) {
+    transform: scale(0.8);
+  }
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+`;
+
+const Chip = styled.div`
+  width: 28px;
+  height: 28px;
+  background: radial-gradient(circle, #ddd 10%, #111 90%);
+  border: 2px dashed white;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #ffd700;
+  box-shadow: 0 2px 5px black;
+`;
+
+const SlotGridFrame = styled.div`
+  border: 2px solid #5555aa;
+  border-radius: 10px;
+  padding: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  width: 100%;
+  max-width: min(720px, 92vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* ensure grid never exceeds the available height */
+  max-height: calc(100vh - var(--header-h) - var(--footer-h) - 40px);
+  height: 100%;
+  box-sizing: border-box;
+`;
+
+const SlotGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  background-color: #000;
+  padding: 4px;
+  border-radius: 6px;
+  width: 100%;
+  height: 100%;
+  grid-auto-rows: 1fr; /* ensure rows share available space evenly */
+  box-sizing: border-box;
+  overflow: hidden; /* prevent inner scroll */
+`;
+
+const Symbol = styled.div<{ $winning?: boolean; $spinning?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, #222, #000);
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: clamp(1rem, 3.2vw, 2rem);
+  position: relative;
+  overflow: hidden;
+  font-weight: bold;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  ${props =>
+    props.$spinning &&
+    css`
+      animation: ${spinAnimation} 0.08s linear infinite;
+      opacity: 0.85;
+      filter: blur(3px);
+    `}
+  ${props =>
+    props.$winning &&
+    css`
+      background: linear-gradient(45deg, #552222, #330000);
+      box-shadow: 0 0 18px rgba(255, 215, 0, 0.9), inset 0 0 8px rgba(255,0,0,0.6);
+      border: 2px solid #ffd700;
+      animation: ${pop} 0.4s ease-in-out infinite alternate;
+      transform-origin: center;
+    `}
+`;
+
+const Footer = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: transparent;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    gap: 5px;
+    padding-bottom: 15px;
+  }
+
+  @media (max-height: 500px) {
+    padding: 2px;
+  }
+`;
+
+const FooterLeft = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  @media (max-width: 480px) {
+    order: 1;
+    gap: 5px;
+  }
+`;
+
+const FooterRight = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  @media (max-width: 480px) {
+    order: 3;
+    display: none;
+  }
+`;
+
+const HudPanel = styled.div`
+  background: linear-gradient(to bottom, #4d4dff, #000066);
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  width: 70px;
+  height: 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 4px;
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  }
+
+  @media (max-width: 768px) {
+    width: 60px;
+    height: 45px;
+  }
+
+  @media (max-width: 480px) {
+    width: 55px;
+    height: 45px;
+  }
+
+  @media (max-height: 500px) {
+    height: 40px;
+  }
+`;
+
+const HudLabel = styled.div`
+  font-size: 0.6rem;
+  color: #ffff00;
+  font-weight: bold;
+  text-align: center;
+  text-transform: uppercase;
+`;
+
+const HudValue = styled.div`
+  background: black;
+  height: 22px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00ff00;
+  font-family: monospace;
+  font-size: 0.9rem;
+  font-weight: bold;
+  border: 1px solid #333;
+
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+  }
+`;
+
+const SpinContainer = styled.div`
+  position: relative;
+
+  @media (max-width: 480px) {
+    order: 2;
+    margin: 0 10px;
+  }
+`;
+
+const SpinBtn = styled.button`
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #4d4dff, #000080);
+  border: 4px solid #ffd700;
+  color: #ffff00;
+  font-family: 'Titan One', cursive;
+  font-size: 1.6rem;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
+  transition: transform 0.1s;
+  text-shadow: 1px 1px 0 #000;
+  z-index: 10;
+  font-weight: bold;
+
+  &:hover:not(:disabled) {
+    animation: ${pulse} 1s ease-in-out infinite;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    filter: grayscale(0.8);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  @media (max-width: 768px) {
+    width: 80px;
+    height: 80px;
+    font-size: 1.4rem;
+  }
+
+  @media (max-width: 480px) {
+    width: 75px;
+    height: 75px;
+    font-size: 1.2rem;
+  }
+
+  @media (max-height: 500px) {
+    width: 60px;
+    height: 60px;
+    font-size: 1rem;
+    border-width: 2px;
+  }
+`;
+
+const ActionBtn = styled.button`
+  background: linear-gradient(to bottom, #4d4dff, #000099);
+  border: 2px solid #ffd700;
+  border-radius: 6px;
+  color: #ffff00;
+  font-weight: 800;
+  font-size: 0.7rem;
+  width: 60px;
+  height: 50px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.5);
+  line-height: 1.1;
+  transition: all 0.3s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  @media (max-width: 768px) {
+    width: 60px;
+    height: 45px;
+  }
+`;
+
+const ErrorMessage = styled.div`
+  background: #cc0000;
+  color: #ffff00;
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border: 2px solid #ff0000;
+  text-align: center;
+  font-weight: bold;
+`;
+
+const WinMessage = styled.div`
+  background: linear-gradient(to bottom, #00cc00, #006600);
+  color: #ffff00;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 3px solid #00ff00;
+  text-align: center;
+  font-family: 'Titan One', cursive;
+  font-size: 1.3rem;
+  text-shadow: 0 0 5px #000;
+  animation: ${pulse} 0.6s ease-in-out;
+`;
+
+// ============= COMPONENT =============
 const SlotMachine: React.FC = () => {
-  useAuth();
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [grid, setGrid] = useState<string[][]>([]);
-  const [balance, setBalance] = useState<number>(0);
-  const [betAmount, setBetAmount] = useState<number>(10);
+  const [balance, setBalance] = useState<number>(10000);
+  const [betAmount, setBetAmount] = useState<number>(100);
   const [isSpinning, setIsSpinning] = useState(false);
   const [lastWin, setLastWin] = useState<number>(0);
   const [winningPositions, setWinningPositions] = useState<Set<string>>(new Set());
   const [showWinMessage, setShowWinMessage] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Default symbols (memoized to prevent re-renders)
-  const defaultSymbols = React.useMemo(() => ['🍒', '🍋', '🍊', '🍇', '🍉', '💎', '⭐', '7️⃣'], []);
+  const defaultSymbols = useMemo(
+    () => ['💎', '7️⃣', '🍒', '🔔', '⭐', '🍋', '👑', '♠️', '♥️', '♣️', '♦️'],
+    []
+  );
 
   const initializeGrid = useCallback(() => {
     const emptyGrid: string[][] = [];
@@ -46,13 +533,12 @@ const SlotMachine: React.FC = () => {
   const fetchBalance = useCallback(async () => {
     try {
       const response = await getWalletBalance();
-      setBalance(response.balance);
+      setBalance(response.balance || 10000); 
     } catch (err) {
       console.error('Failed to fetch balance:', err);
     }
   }, []);
 
-  // Initialize empty grid and load themes
   useEffect(() => {
     initializeGrid();
     fetchBalance();
@@ -63,10 +549,12 @@ const SlotMachine: React.FC = () => {
     if (isSpinning) return;
     if (betAmount > balance) {
       setError('Insufficient balance!');
+      setTimeout(() => setError(''), 3000);
       return;
     }
     if (betAmount < 1) {
       setError('Minimum bet is 1 coin');
+      setTimeout(() => setError(''), 3000);
       return;
     }
 
@@ -77,36 +565,70 @@ const SlotMachine: React.FC = () => {
     setLastWin(0);
 
     try {
-      // Start spinning animation
-      await animateSpinning();
-
-      // Call backend API with themeId
       const themeId = selectedTheme?.id || themes[0]?.id;
       if (!themeId) {
         throw new Error('No theme selected');
       }
+
+      // Simulate spinning with staggered delays
+      const spinResults: string[][] = [[], [], [], [], []];
+      const spinPromises = [];
+
+      for (let col = 0; col < 5; col++) {
+        spinPromises.push(
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              const colSymbols = [];
+              for (let row = 0; row < 6; row++) {
+                colSymbols.push(
+                  defaultSymbols[Math.floor(Math.random() * defaultSymbols.length)]
+                );
+              }
+              spinResults[col] = colSymbols;
+              resolve();
+            }, 1000 + col * 200);
+          })
+        );
+      }
+
+      await Promise.all(spinPromises);
+
+      // Transpose to row-major format
+      const result: string[][] = [];
+      for (let row = 0; row < 6; row++) {
+        const rowData: string[] = [];
+        for (let col = 0; col < 5; col++) {
+          rowData.push(spinResults[col][row]);
+        }
+        result.push(rowData);
+      }
+
+      setGrid(result);
+
+      // Call backend API
       const spinResult = await spinSlot(themeId, betAmount);
 
-      // Update grid with result
-      setGrid(spinResult.result);
+      // Update balance
       setBalance(spinResult.balance);
-      setLastWin(spinResult.winAmount);
 
-      // Highlight winning positions
-      if (spinResult.winningLines && spinResult.winningLines.length > 0) {
-        const positions = new Set<string>();
-        spinResult.winningLines.forEach((line: any) => {
-          if (line.positions) {
-            line.positions.forEach((pos: any) => {
-              positions.add(`${pos.row}-${pos.col}`);
-            });
-          }
-        });
-        setWinningPositions(positions);
+      // Check for wins
+      if (spinResult.winAmount > 0) {
+        setLastWin(spinResult.winAmount);
         setShowWinMessage(true);
-
-        // Hide win message after 3 seconds
         setTimeout(() => setShowWinMessage(false), 3000);
+
+        // Highlight winning positions
+        if (spinResult.winningLines && spinResult.winningLines.length > 0) {
+          const positions = new Set<string>();
+          spinResult.winningLines.forEach((line: any) => {
+            if (line.positions) {
+              line.positions.forEach((pos: any) => {
+                positions.add(`${pos.row}-${pos.col}`);
+              });
+            }
+          });
+          setWinningPositions(positions);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Spin failed. Please try again.');
@@ -116,428 +638,113 @@ const SlotMachine: React.FC = () => {
     }
   };
 
-  const animateSpinning = () => {
-    return new Promise<void>((resolve) => {
-      let iterations = 0;
-      const maxIterations = 15;
-
-      const interval = setInterval(() => {
-        setGrid((prevGrid) => {
-          const newGrid: string[][] = [];
-          for (let row = 0; row < 6; row++) {
-            const rowData: string[] = [];
-            for (let col = 0; col < 5; col++) {
-              rowData.push(defaultSymbols[Math.floor(Math.random() * defaultSymbols.length)]);
-            }
-            newGrid.push(rowData);
-          }
-          return newGrid;
-        });
-
-        iterations++;
-        if (iterations >= maxIterations) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, 100);
-    });
+  const handleBetChange = () => {
+    if (isSpinning) return;
+    setBetAmount((prev) => (prev >= 500 ? 10 : prev + 10));
   };
 
-  const adjustBet = (amount: number) => {
-    const newBet = betAmount + amount;
-    if (newBet >= 1 && newBet <= balance) {
-      setBetAmount(newBet);
-    }
-  };
-
-  const isWinningPosition = (row: number, col: number): boolean => {
-    return winningPositions.has(`${row}-${col}`);
+  const handleMaxBet = () => {
+    if (isSpinning) return;
+    setBetAmount(500);
   };
 
   return (
-    <Container>
-      <SlotMachineFrame>
-        <Header>
-          <BalanceDisplay>
-            <BalanceLabel>Balance</BalanceLabel>
-            <BalanceAmount>{balance.toFixed(0)}</BalanceAmount>
-            <BalanceCoins>coins</BalanceCoins>
-          </BalanceDisplay>
+    <GameWrapper>
+      {/* Header */}
+      <Header>
+        <DisplayBox>
+          <Label>Balance</Label>
+          <ValueBox>{Math.floor(balance || 0).toLocaleString()}</ValueBox>
+        </DisplayBox>
 
-          {lastWin > 0 && showWinMessage && (
-            <WinMessage>
-              <WinIcon>🎉</WinIcon>
-              <WinText>You Won!</WinText>
-              <WinAmount>+{lastWin} coins</WinAmount>
-            </WinMessage>
-          )}
-        </Header>
+        <TitleArea>
+          <Stars>★★★</Stars>
+          <GameTitle>SLOTS</GameTitle>
+          <Stars>★★★</Stars>
+        </TitleArea>
 
-        <GridContainer>
-          <ReelContainer>
-            {grid.map((row, rowIndex) => (
-              <ReelRow key={rowIndex}>
-                {row.map((symbol, colIndex) => (
-                  <Reel
-                    key={`${rowIndex}-${colIndex}`}
-                    $isSpinning={isSpinning}
-                    $delay={colIndex * 0.1}
-                    $isWinning={isWinningPosition(rowIndex, colIndex)}
-                  >
-                    <SymbolDisplay>{symbol}</SymbolDisplay>
-                  </Reel>
-                ))}
-              </ReelRow>
-            ))}
-          </ReelContainer>
-        </GridContainer>
+        <MenuBtn>MENU</MenuBtn>
+      </Header>
 
-        <Controls>
-          <BetSection>
-            <BetLabel>Bet Amount</BetLabel>
-            <BetControls>
-              <BetButton onClick={() => adjustBet(-10)} disabled={isSpinning || betAmount <= 10}>
-                -10
-              </BetButton>
-              <BetButton onClick={() => adjustBet(-1)} disabled={isSpinning || betAmount <= 1}>
-                -1
-              </BetButton>
-              <BetDisplay>{betAmount}</BetDisplay>
-              <BetButton onClick={() => adjustBet(1)} disabled={isSpinning || betAmount >= balance}>
-                +1
-              </BetButton>
-              <BetButton onClick={() => adjustBet(10)} disabled={isSpinning || betAmount + 10 > balance}>
-                +10
-              </BetButton>
-            </BetControls>
-          </BetSection>
+      {/* Error Message */}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
 
-          <SpinButton onClick={handleSpin} disabled={isSpinning || betAmount > balance}>
-            {isSpinning ? (
-              <>
-                <Spinner>⚙️</Spinner> Spinning...
-              </>
-            ) : (
-              <>🎰 SPIN</>
+      {/* Win Message */}
+      {showWinMessage && <WinMessage>🎉 WIN: {Math.floor(lastWin || 0).toLocaleString()} 🎉</WinMessage>}
+
+      {/* Main Grid Area */}
+      <MainPlayArea>
+        <SideChips>
+          <Chip>4</Chip>
+          <Chip>2</Chip>
+          <Chip>8</Chip>
+          <Chip>6</Chip>
+          <Chip>1</Chip>
+        </SideChips>
+
+        <SlotGridFrame>
+          <SlotGrid>
+            {grid.map((row, rowIdx) =>
+              row.map((symbol, colIdx) => (
+                <Symbol
+                  key={`${rowIdx}-${colIdx}`}
+                  $spinning={isSpinning}
+                  $winning={winningPositions.has(`${rowIdx}-${colIdx}`)}
+                >
+                  {symbol}
+                </Symbol>
+              ))
             )}
-          </SpinButton>
+          </SlotGrid>
+        </SlotGridFrame>
 
-          <QuickBets>
-            <QuickBetButton onClick={() => setBetAmount(10)} disabled={isSpinning || balance < 10}>
-              10
-            </QuickBetButton>
-            <QuickBetButton onClick={() => setBetAmount(50)} disabled={isSpinning || balance < 50}>
-              50
-            </QuickBetButton>
-            <QuickBetButton onClick={() => setBetAmount(100)} disabled={isSpinning || balance < 100}>
-              100
-            </QuickBetButton>
-            <QuickBetButton onClick={() => setBetAmount(Math.min(balance, 500))} disabled={isSpinning || balance < 1}>
-              MAX
-            </QuickBetButton>
-          </QuickBets>
-        </Controls>
+        <SideChips>
+          <Chip>1</Chip>
+          <Chip>6</Chip>
+          <Chip>9</Chip>
+          <Chip>2</Chip>
+          <Chip>4</Chip>
+        </SideChips>
+      </MainPlayArea>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-      </SlotMachineFrame>
-    </Container>
+      {/* Footer Controls */}
+      <Footer>
+        <FooterLeft>
+          <HudPanel>
+            <HudLabel>Lines</HudLabel>
+            <HudValue>15</HudValue>
+          </HudPanel>
+          <HudPanel onClick={handleBetChange} style={{ cursor: 'pointer' }}>
+            <HudLabel>Bet</HudLabel>
+            <HudValue>{betAmount}</HudValue>
+          </HudPanel>
+          <HudPanel>
+            <HudLabel>Win</HudLabel>
+            <HudValue>{Math.floor(lastWin || 0).toLocaleString()}</HudValue>
+          </HudPanel>
+        </FooterLeft>
+
+        <SpinContainer>
+          <SpinBtn onClick={handleSpin} disabled={isSpinning}>
+            SPIN
+          </SpinBtn>
+        </SpinContainer>
+
+        <FooterRight>
+          <ActionBtn onClick={handleMaxBet} disabled={isSpinning}>
+            MAX
+            <br />
+            BET
+          </ActionBtn>
+          <ActionBtn disabled={isSpinning}>
+            AUTO
+            <br />
+            SPIN
+          </ActionBtn>
+        </FooterRight>
+      </Footer>
+    </GameWrapper>
   );
 };
-
-// Animations
-const spin = keyframes`
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-100%); }
-`;
-
-const glow = keyframes`
-  0%, 100% { 
-    box-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 30px #ffd700;
-    transform: scale(1);
-  }
-  50% { 
-    box-shadow: 0 0 20px #ffd700, 0 0 40px #ffd700, 0 0 60px #ffd700;
-    transform: scale(1.05);
-  }
-`;
-
-const pulse = keyframes`
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-`;
-
-const rotate = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
-
-// Styled Components
-const Container = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-`;
-
-const SlotMachineFrame = styled.div`
-  background: linear-gradient(145deg, #2c3e50, #34495e);
-  border-radius: 30px;
-  padding: 30px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  border: 5px solid #f39c12;
-  max-width: 900px;
-  width: 100%;
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 0 10px;
-`;
-
-const BalanceDisplay = styled.div`
-  background: rgba(255, 255, 255, 0.1);
-  padding: 15px 25px;
-  border-radius: 15px;
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-`;
-
-const BalanceLabel = styled.div`
-  color: #bdc3c7;
-  font-size: 0.9rem;
-  margin-bottom: 5px;
-`;
-
-const BalanceAmount = styled.div`
-  color: #f39c12;
-  font-size: 2rem;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-`;
-
-const BalanceCoins = styled.span`
-  color: #bdc3c7;
-  font-size: 0.85rem;
-  margin-left: 5px;
-`;
-
-const WinMessage = styled.div`
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-  padding: 15px 30px;
-  border-radius: 15px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  animation: ${pulse} 0.5s ease-in-out;
-  box-shadow: 0 10px 30px rgba(243, 156, 18, 0.5);
-`;
-
-const WinIcon = styled.span`
-  font-size: 2rem;
-`;
-
-const WinText = styled.span`
-  color: white;
-  font-size: 1.2rem;
-  font-weight: bold;
-`;
-
-const WinAmount = styled.span`
-  color: #fff;
-  font-size: 1.5rem;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-`;
-
-const GridContainer = styled.div`
-  background: linear-gradient(145deg, #1a1a2e, #16213e);
-  padding: 20px;
-  border-radius: 20px;
-  border: 3px solid #f39c12;
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5);
-`;
-
-const ReelContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const ReelRow = styled.div`
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-`;
-
-const Reel = styled.div<{ $isSpinning: boolean; $delay: number; $isWinning: boolean }>`
-  width: 100px;
-  height: 100px;
-  background: ${props => props.$isWinning ? 'linear-gradient(145deg, #ffd700, #ffed4e)' : 'linear-gradient(145deg, #ecf0f1, #bdc3c7)'};
-  border-radius: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 3rem;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  border: 3px solid ${props => props.$isWinning ? '#ffd700' : '#34495e'};
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-
-  ${props => props.$isSpinning && `
-    animation: ${spin} 0.1s linear infinite;
-    animation-delay: ${props.$delay}s;
-  `}
-
-  ${props => props.$isWinning && `
-    animation: ${glow} 1s ease-in-out infinite;
-  `}
-
-  &:hover {
-    transform: scale(1.05);
-  }
-`;
-
-const SymbolDisplay = styled.div`
-  user-select: none;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-`;
-
-const Controls = styled.div`
-  margin-top: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const BetSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-`;
-
-const BetLabel = styled.div`
-  color: #ecf0f1;
-  font-size: 1rem;
-  font-weight: 600;
-`;
-
-const BetControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
-
-const BetButton = styled.button`
-  padding: 10px 20px;
-  background: linear-gradient(145deg, #3498db, #2980b9);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const BetDisplay = styled.div`
-  background: rgba(255, 255, 255, 0.1);
-  padding: 10px 30px;
-  border-radius: 10px;
-  color: #f39c12;
-  font-size: 1.5rem;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  min-width: 100px;
-  text-align: center;
-`;
-
-const SpinButton = styled.button`
-  padding: 20px 60px;
-  background: linear-gradient(145deg, #e74c3c, #c0392b);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  font-size: 1.8rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 10px 30px rgba(231, 76, 60, 0.4);
-  align-self: center;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-5px);
-    box-shadow: 0 15px 40px rgba(231, 76, 60, 0.6);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(-2px);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-  }
-`;
-
-const Spinner = styled.span`
-  display: inline-block;
-  animation: ${rotate} 1s linear infinite;
-`;
-
-const QuickBets = styled.div`
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-`;
-
-const QuickBetButton = styled.button`
-  padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ecf0f1;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-
-  &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: #f39c12;
-    color: #f39c12;
-    transform: translateY(-2px);
-  }
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-`;
-
-const ErrorMessage = styled.div`
-  margin-top: 15px;
-  padding: 12px 20px;
-  background: rgba(231, 76, 60, 0.2);
-  border: 2px solid #e74c3c;
-  border-radius: 10px;
-  color: #e74c3c;
-  text-align: center;
-  font-weight: 600;
-`;
 
 export default SlotMachine;
