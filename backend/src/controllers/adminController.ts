@@ -1,3 +1,54 @@
+/**
+ * PUT /api/admin/users/:userId/balance - Update user wallet balance
+ * Only SUPER_ADMIN and SUPPORT_STAFF
+ */
+export const updateUserBalance = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { balance } = req.body;
+    const adminId = req.user?.id;
+
+    // Only allow SUPER_ADMIN and SUPPORT_STAFF
+    if (!req.user || !['SUPER_ADMIN', 'SUPPORT_STAFF'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    if (typeof balance !== 'number' || balance < 0) {
+      return res.status(400).json({ error: 'Invalid balance value' });
+    }
+
+    // Find wallet
+    const wallet = await prisma.wallet.findUnique({ where: { userId } });
+    if (!wallet) {
+      return res.status(404).json({ error: 'Wallet not found for user' });
+    }
+
+    // Update wallet balance
+    const updatedWallet = await prisma.wallet.update({
+      where: { userId },
+      data: { balance },
+    });
+
+    // Log admin action
+    await prisma.adminLog.create({
+      data: {
+        admin: { connect: { id: adminId } },
+        action: 'UPDATE_USER_BALANCE',
+        objectType: 'user',
+        objectId: userId,
+        payload: { previousBalance: wallet.balance, newBalance: balance },
+        ip: req.ip || '',
+      },
+    });
+
+    res.json({
+      message: 'User balance updated successfully',
+      wallet: updatedWallet,
+    });
+  } catch (error: any) {
+    console.error('Update user balance error:', error);
+    res.status(500).json({ error: 'Failed to update user balance' });
+  }
+};
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../config/db';
@@ -384,5 +435,216 @@ export const deleteTheme = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('Delete theme error:', error);
     res.status(500).json({ error: 'Failed to delete theme' });
+  }
+};
+
+/**
+ * GET /admin/users - Get all users with optional filtering
+ */
+export const getAllUsers = async (req: AuthRequest, res: Response) => {
+  try {
+    const { role, status, search, limit = '50', offset = '0' } = req.query;
+    const pageLimit = Math.min(parseInt(limit as string) || 50, 100);
+    const pageOffset = parseInt(offset as string) || 0;
+
+    // Build filter
+    const where: any = {};
+    if (role) where.role = role;
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { displayName: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+
+    // Fetch users
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          lastLogin: true,
+          wallets: {
+            select: {
+              balance: true,
+              currency: true
+            }
+          }
+        },
+        skip: pageOffset,
+        take: pageLimit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    res.json({
+      users,
+      total,
+      limit: pageLimit,
+      offset: pageOffset,
+      hasMore: pageOffset + pageLimit < total,
+    });
+  } catch (error: any) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
+/**
+ * PUT /admin/users/:userId/status - Update user status
+ */
+export const updateUserStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.body;
+    const adminId = req.user!.id;
+
+    // Validate status
+    const validStatuses = ['ACTIVE', 'BANNED', 'DISABLED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid status. Must be one of: ACTIVE, BANNED, DISABLED',
+      });
+    }
+
+    // Get existing user
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Cannot ban/disable super admin
+    if (existingUser.role === 'SUPER_ADMIN' && status !== 'ACTIVE') {
+      return res.status(403).json({
+        error: 'Cannot change status of super admin users',
+      });
+    }
+
+    // Update user status
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { status },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        lastLogin: true,
+        wallets: {
+          select: {
+            balance: true,
+            currency: true
+          }
+        }
+      },
+    });
+
+    // Log action
+    await prisma.adminLog.create({
+      data: {
+        adminId,
+        action: 'UPDATE_USER_STATUS',
+        objectType: 'user',
+        objectId: userId,
+        payload: { previousStatus: existingUser.status, newStatus: status },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({
+      message: 'User status updated successfully',
+      user: updatedUser,
+    });
+  } catch (error: any) {
+    console.error('Update user status error:', error);
+    res.status(500).json({ error: 'Failed to update user status' });
+  }
+};
+
+/**
+ * PUT /admin/users/:userId/role - Update user role
+ */
+export const updateUserRole = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+    const adminId = req.user!.id;
+
+    // Validate role
+    const validRoles = ['PLAYER', 'SUPPORT_STAFF', 'GAME_MANAGER', 'SUPER_ADMIN'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        error: 'Invalid role. Must be one of: PLAYER, SUPPORT_STAFF, GAME_MANAGER, SUPER_ADMIN',
+      });
+    }
+
+    // Get existing user
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only SUPER_ADMIN can promote to SUPER_ADMIN
+    if (role === 'SUPER_ADMIN' && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        error: 'Only super admins can assign super admin role',
+      });
+    }
+
+    // Update user role
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        lastLogin: true,
+        wallets: {
+          select: {
+            balance: true,
+            currency: true
+          }
+        }
+      },
+    });
+
+    // Log action
+    await prisma.adminLog.create({
+      data: {
+        adminId,
+        action: 'UPDATE_USER_ROLE',
+        objectType: 'user',
+        objectId: userId,
+        payload: { previousRole: existingUser.role, newRole: role },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({
+      message: 'User role updated successfully',
+      user: updatedUser,
+    });
+  } catch (error: any) {
+    console.error('Update user role error:', error);
+    res.status(500).json({ error: 'Failed to update user role' });
   }
 };

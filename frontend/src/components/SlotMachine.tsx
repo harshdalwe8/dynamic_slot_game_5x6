@@ -19,17 +19,6 @@ const pulse = keyframes`
   50% { box-shadow: 0 0 20px rgba(255, 215, 0, 1); }
 `;
 
-const glow = keyframes`
-  0%, 100% { 
-    box-shadow: 0 0 10px #ffd700, inset 0 0 10px red;
-    transform: scale(1);
-  }
-  50% { 
-    box-shadow: 0 0 20px #ffd700, inset 0 0 20px red;
-    transform: scale(1.05);
-  }
-`;
-
 // ============= STYLED COMPONENTS =============
 const GameWrapper = styled.div`
   /* Ensure the game occupies the full viewport and prevents body scrolling */

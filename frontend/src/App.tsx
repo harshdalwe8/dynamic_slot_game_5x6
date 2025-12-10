@@ -4,7 +4,7 @@ import SlotMachine from './components/SlotMachine';
 import Login from './components/Login';
 import Register from './components/Register';
 import AdminLogin from './components/AdminLogin';
-import AdminDashboard from './components/AdminDashboard';
+import AdminPanel from './components/AdminPanel';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import styled from 'styled-components';
@@ -96,11 +96,11 @@ const App: React.FC = () => {
 
             {/* Admin Routes */}
             <Route path="/admin/login" exact component={AdminLogin} />
-            <AdminRoute path="/admin/dashboard" exact component={AdminDashboard} />
-            <AdminRoute path="/admin/themes" exact component={AdminDashboard} />
-            <AdminRoute path="/admin/users" exact component={AdminDashboard} />
-            <AdminRoute path="/admin/reports" exact component={AdminDashboard} />
-            <AdminRoute path="/admin/settings" exact component={AdminDashboard} />
+            <AdminRoute path="/admin/dashboard" exact component={() => <AdminPanel page="dashboard" />} />
+            <AdminRoute path="/admin/themes" exact component={() => <AdminPanel page="themes" />} />
+            <AdminRoute path="/admin/users" exact component={() => <AdminPanel page="users" />} />
+            <AdminRoute path="/admin/reports" exact component={() => <AdminPanel page="reports" />} />
+            <AdminRoute path="/admin/settings" exact component={() => <AdminPanel page="settings" />} />
 
             {/* Default Redirect */}
             <Route path="/" exact>

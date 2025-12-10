@@ -360,6 +360,53 @@ export const auditSpin = async (spinId: string) => {
   return response.data;
 };
 
+// ============= USER MANAGEMENT =============
+
+export interface UserListResponse {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'PLAYER' | 'SUPPORT_STAFF' | 'GAME_MANAGER' | 'SUPER_ADMIN';
+  status: 'ACTIVE' | 'BANNED' | 'DISABLED';
+  balance: number;
+  createdAt: string;
+  lastLogin: string;
+}
+
+export interface UserListParams {
+  role?: string;
+  status?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const getAllUsers = async (params?: UserListParams) => {
+  const response = await adminApi.get('/admin/users', { params });
+  return response.data;
+};
+
+export const updateUserStatus = async (
+  userId: string,
+  status: 'ACTIVE' | 'BANNED' | 'DISABLED'
+) => {
+  const response = await adminApi.put(`/admin/users/${userId}/status`, { status });
+  return response.data;
+};
+
+export const updateUserRole = async (
+  userId: string,
+  role: 'PLAYER' | 'SUPPORT_STAFF' | 'GAME_MANAGER' | 'SUPER_ADMIN'
+) => {
+  const response = await adminApi.put(`/admin/users/${userId}/role`, { role });
+  return response.data;
+};
+
+export const updateUserBalance = async (userId: string, balance: number) => {
+  const response = await adminApi.put(`/admin/users/${userId}/balance`, { balance });
+  return response.data;
+};
+
 // Helper function to download CSV blob
 export const downloadCSV = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
