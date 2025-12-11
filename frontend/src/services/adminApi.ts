@@ -63,10 +63,8 @@ export interface Theme {
 
 export interface CreateThemeRequest {
   name: string;
-  configuration: any;
-  minBet: number;
-  maxBet: number;
-  status?: 'DRAFT' | 'ACTIVE';
+  jsonSchema: any;
+  assetManifest: any;
 }
 
 export interface UpdateThemeRequest {
@@ -131,14 +129,6 @@ export const uploadThemeAssets = async (themeId: string, files: File[]) => {
   return response.data;
 };
 
-export const uploadThemeJSON = async (file: File) => {
-  const formData = new FormData();
-  formData.append('theme', file);
-  const response = await adminApi.post('/admin/upload/theme-json', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return response.data;
-};
 
 export const uploadImage = async (file: File) => {
   const formData = new FormData();

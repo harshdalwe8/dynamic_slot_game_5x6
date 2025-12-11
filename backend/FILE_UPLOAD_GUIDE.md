@@ -45,7 +45,7 @@ MAX_FILE_SIZE=10485760
 
 ### File Size Limits
 
-- **Theme Assets**: 10MB per file, max 20 files per upload
+- **Theme Assets**: 10MB per file, max 100 files per upload
 - **Images**: 5MB per file
 - **JSON**: 1MB per file
 
@@ -76,7 +76,7 @@ Authorization: Bearer JWT_TOKEN
 
 **Form Data:**
 - Field name: `assets` (multiple files)
-- Max files: 20
+- Max files: 100
 - Max size per file: 10MB
 
 **cURL Example:**
@@ -116,70 +116,60 @@ curl -X POST http://localhost:3000/api/admin/upload/theme-assets/THEME_UUID \
 - Asset manifest in database is automatically updated
 - Admin action is logged
 
-### 2. Upload Theme JSON (Create Theme)
+### 2. Create Theme (manifest in request body)
 
-Upload a JSON configuration file to create a new theme.
+The JSON file-upload endpoint (`POST /api/admin/upload/theme-json`) has been removed. To create a theme, POST the theme manifest in the request body to the admin themes API and then upload any assets separately.
+
+Create theme manifest via JSON body:
 
 ```
-POST /api/admin/upload/theme-json
+POST /api/admin/themes
+Content-Type: application/json
+Authorization: Bearer JWT_TOKEN
+```
+
+Request body should include fields such as `name`, `jsonSchema` (symbols, reels, paylines, payouts, etc.), and an optional `assetManifest` referencing file paths.
+
+**cURL Example:**
+```bash
+curl -X POST http://localhost:3000/api/admin/themes \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Egyptian Gold",
+    "jsonSchema": {
+      "symbols": ["A","K","Q"],
+      "reels": 5,
+      "rows": 6,
+      "paylines": 30,
+      "payouts": {"A": [5,25,100]}
+    },
+    "assetManifest": {
+      "background": "backgrounds/egyptian.png",
+      "symbols": {"A": "symbols/a.png"}
+    }
+  }'
+```
+
+Then upload assets (images, JSON) using the theme assets endpoint:
+
+```
+POST /api/admin/upload/theme-assets/:themeId
 Content-Type: multipart/form-data
 Authorization: Bearer JWT_TOKEN
 ```
 
-**Form Data:**
-- Field name: `theme` (single JSON file)
-- Max size: 1MB
-
-**JSON Structure:**
-```json
-{
-  "name": "Egyptian Gold",
-  "reels": [
-    ["symbol1", "symbol2", "symbol3"],
-    ["symbol1", "symbol2", "symbol3"],
-    ["symbol1", "symbol2", "symbol3"],
-    ["symbol1", "symbol2", "symbol3"],
-    ["symbol1", "symbol2", "symbol3"]
-  ],
-  "symbols": {
-    "symbol1": { "name": "Pharaoh", "multiplier": 10 },
-    "symbol2": { "name": "Scarab", "multiplier": 5 }
-  },
-  "paylines": [
-    [0,0,0,0,0],
-    [1,1,1,1,1]
-  ],
-  "baseRtp": 95.5,
-  "bonusFeatures": {}
-}
-```
-
 **cURL Example:**
 ```bash
-curl -X POST http://localhost:3000/api/admin/upload/theme-json \
+curl -X POST http://localhost:3000/api/admin/upload/theme-assets/THEME_UUID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -F "theme=@egyptian-gold.json"
-```
-
-**Response:**
-```json
-{
-  "message": "Theme created successfully from JSON",
-  "theme": {
-    "id": "new-theme-uuid",
-    "name": "Egyptian Gold",
-    "version": 1,
-    "status": "DRAFT"
-  }
-}
+  -F "assets=@background.png" \
+  -F "assets=@symbol1.png"
 ```
 
 **Notes:**
-- Automatically creates theme in database with status `DRAFT`
-- Creates initial `ThemeVersion` record
-- Creates `Payline` records from JSON
-- Validates JSON structure and schema
-- File is stored in `uploads/assets/`
+- Creating a theme via `POST /api/admin/themes` will create a `DRAFT` theme and an initial `ThemeVersion`.
+- Uploading assets via `/api/admin/upload/theme-assets/:themeId` will place files under `uploads/themes/{themeId}/` and update the theme's asset manifest.
 
 ### 3. Upload Single Image
 
@@ -447,14 +437,12 @@ Theme assets are tracked in the `assetManifest` field:
 {
   "uploadedFile": "theme-config.json",
   "uploadedAt": "2024-12-03T10:30:00.000Z",
-  "assets": [
+  "base_path": "themes/aqua-slot/game-screen/png-gui/",
+  "components": [
     {
-      "filename": "background-1733239876543-a1b2c3.png",
-      "originalName": "background.png",
-      "mimetype": "image/png",
-      "size": 524288,
-      "url": "http://localhost:3000/uploads/themes/theme-uuid/background-1733239876543-a1b2c3.png",
-      "path": "/path/to/uploads/themes/theme-uuid/background-1733239876543-a1b2c3.png"
+      "placeholder": "ui.balance",
+      "file_name": "Balance-1700000000000-a1b2c3.png",
+      "url": "http://localhost:3000/uploads/themes/theme-uuid/Balance-1700000000000-a1b2c3.png"
     }
   ],
   "updatedAt": "2024-12-03T10:35:00.000Z"

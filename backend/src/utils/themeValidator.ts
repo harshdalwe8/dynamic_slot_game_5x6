@@ -112,50 +112,79 @@ const validate = ajv.compile(themeSchema);
 
 /**
  * Validate theme JSON against schema
+ * Supports both strict schema (grid, symbols, paylines, etc.) and UI manifest format (components, base_path)
  */
 export function validateThemeJson(themeJson: any): {
   valid: boolean;
   errors: string[];
 } {
+  const errors: string[] = [];
+
+  if (!themeJson || typeof themeJson !== 'object') {
+    return { valid: false, errors: ['Theme JSON must be an object'] };
+  }
+
+  // Check if this is the UI manifest format (components + base_path)
+  if (Array.isArray(themeJson.components) && typeof themeJson.base_path === 'string') {
+    // UI manifest format: just validate basic structure
+    if (!themeJson.theme_id || typeof themeJson.theme_id !== 'string') {
+      errors.push('Theme manifest must have a "theme_id" string');
+    }
+    if (!themeJson.theme_name || typeof themeJson.theme_name !== 'string') {
+      errors.push('Theme manifest must have a "theme_name" string');
+    }
+    if (!Array.isArray(themeJson.components) || themeJson.components.length === 0) {
+      errors.push('Theme manifest must have a non-empty "components" array');
+    }
+    // Validate each component
+    for (const comp of themeJson.components) {
+      if (!comp.placeholder || typeof comp.placeholder !== 'string') {
+        errors.push('Each component must have a "placeholder" string');
+      }
+      if (!comp.file_name || typeof comp.file_name !== 'string') {
+        errors.push('Each component must have a "file_name" string');
+      }
+    }
+    return { valid: errors.length === 0, errors };
+  }
+
+  // Strict schema format (grid, symbols, paylines, etc.)
   const valid = validate(themeJson);
 
   if (!valid && validate.errors) {
-    const errors = validate.errors.map(
+    const schemaErrors = validate.errors.map(
       (err) => `${err.instancePath} ${err.message}`
     );
-    return { valid: false, errors };
+    return { valid: false, errors: schemaErrors };
   }
 
-  // Additional business logic validation
-  const customErrors: string[] = [];
-
-  // Validate that asset filenames don't contain path traversal
-  for (const symbol of themeJson.symbols) {
-    if (symbol.asset.includes('..') || symbol.asset.includes('/') || symbol.asset.includes('\\')) {
-      customErrors.push(`Symbol ${symbol.id}: Invalid asset filename`);
-    }
-  }
-
-  // Validate payline positions are within grid bounds
-  for (const payline of themeJson.paylines) {
-    for (const position of payline.positions) {
-      if (position[0] >= themeJson.grid.columns || position[1] >= themeJson.grid.rows) {
-        customErrors.push(`Payline ${payline.id}: Position out of grid bounds`);
+  // Additional business logic validation for strict format
+  if (Array.isArray(themeJson.symbols)) {
+    for (const symbol of themeJson.symbols) {
+      if (symbol.asset && (symbol.asset.includes('..') || symbol.asset.includes('/') || symbol.asset.includes('\\'))) {
+        errors.push(`Symbol ${symbol.id}: Invalid asset filename`);
       }
     }
   }
 
-  // Validate symbol weights sum to reasonable total
-  const totalWeight = themeJson.symbols.reduce((sum: number, s: any) => sum + s.weight, 0);
-  if (totalWeight === 0) {
-    customErrors.push('Total symbol weights must be greater than 0');
+  if (Array.isArray(themeJson.paylines) && themeJson.grid) {
+    for (const payline of themeJson.paylines) {
+      for (const position of payline.positions) {
+        if (position[0] >= themeJson.grid.columns || position[1] >= themeJson.grid.rows) {
+          errors.push(`Payline ${payline.id}: Position out of grid bounds`);
+        }
+      }
+    }
   }
 
-  if (customErrors.length > 0) {
-    return { valid: false, errors: customErrors };
+  if (Array.isArray(themeJson.symbols)) {
+    const totalWeight = themeJson.symbols.reduce((sum: number, s: any) => sum + (s.weight || 0), 0);
+    if (totalWeight === 0) {
+      errors.push('Total symbol weights must be greater than 0');
+    }
   }
 
-  return { valid: true, errors: [] };
+  return { valid: errors.length === 0, errors };
 }
 
 /**
@@ -171,19 +200,56 @@ export function validateAssetManifest(assetManifest: any): {
     return { valid: false, errors: ['Asset manifest must be an object'] };
   }
 
-  if (!Array.isArray(assetManifest.assets)) {
-    return { valid: false, errors: ['Asset manifest must have an "assets" array'] };
+  // New default shape: { base_path: string, components: [{ placeholder, file_name, url }] }
+  if (Array.isArray(assetManifest.components)) {
+    for (const comp of assetManifest.components) {
+      if (!comp || typeof comp !== 'object') {
+        errors.push('Invalid component entry in asset manifest');
+        continue;
+      }
+      if (typeof comp.placeholder !== 'string' || comp.placeholder.length === 0) {
+        errors.push('Component must have a non-empty "placeholder" string');
+      }
+      if (typeof comp.file_name !== 'string' || comp.file_name.length === 0) {
+        errors.push('Component must have a non-empty "file_name" string');
+      }
+      if (comp.url && typeof comp.url !== 'string') {
+        errors.push('Component "url" must be a string when present');
+      }
+      // Prevent path traversal in file_name
+      if (typeof comp.file_name === 'string' && (comp.file_name.includes('..') || comp.file_name.includes('/') || comp.file_name.includes('\\'))) {
+        errors.push(`Invalid component file_name: ${comp.file_name}`);
+      }
+    }
+    return { valid: errors.length === 0, errors };
   }
 
-  // Validate each asset filename
-  for (const asset of assetManifest.assets) {
-    if (typeof asset !== 'string' || asset.length === 0) {
-      errors.push('Invalid asset filename');
+  // Legacy shape: { assets: [string | object] }
+  if (Array.isArray(assetManifest.assets)) {
+    for (const asset of assetManifest.assets) {
+      if (!asset) {
+        errors.push('Invalid asset entry');
+        continue;
+      }
+      // allow either string filenames or object entries with filename/originalName
+      if (typeof asset === 'string') {
+        if (asset.length === 0) errors.push('Invalid asset filename');
+        if (asset.includes('..') || asset.includes('/') || asset.includes('\\')) {
+          errors.push(`Invalid asset filename: ${asset}`);
+        }
+      } else if (typeof asset === 'object') {
+        const filename = asset.filename || asset.originalName || asset.file_name;
+        if (!filename || typeof filename !== 'string') {
+          errors.push('Asset object missing filename');
+        } else if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+          errors.push(`Invalid asset filename: ${filename}`);
+        }
+      } else {
+        errors.push('Invalid asset entry type');
+      }
     }
-    if (asset.includes('..') || asset.includes('/') || asset.includes('\\')) {
-      errors.push(`Invalid asset filename: ${asset}`);
-    }
+    return { valid: errors.length === 0, errors };
   }
 
-  return { valid: errors.length === 0, errors };
+  return { valid: false, errors: ['Asset manifest must contain either "components" or "assets" array'] };
 }

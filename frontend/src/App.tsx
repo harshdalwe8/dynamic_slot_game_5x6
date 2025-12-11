@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import AdminLogin from './components/AdminLogin';
 import AdminPanel from './components/AdminPanel';
+import ThemeSelection from './components/ThemeSelection';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import styled from 'styled-components';
@@ -92,6 +93,7 @@ const App: React.FC = () => {
             {/* Player Routes */}
             <Route path="/login" exact component={Login} />
             <Route path="/register" exact component={Register} />
+            <ProtectedRoute path="/themes" exact component={ThemeSelection} />
             <ProtectedRoute path="/game" component={GamePage} />
 
             {/* Admin Routes */}

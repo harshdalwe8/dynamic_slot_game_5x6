@@ -18,7 +18,7 @@ const Login: React.FC = () => {
 
     try {
       await login(email, password);
-      history.push('/game');
+      history.push('/themes');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -32,7 +32,7 @@ const Login: React.FC = () => {
 
     try {
       await loginAsGuest();
-      history.push('/game');
+      history.push('/themes');
     } catch (err: any) {
       setError(err.message);
     } finally {

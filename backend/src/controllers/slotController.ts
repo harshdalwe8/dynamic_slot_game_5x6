@@ -40,8 +40,31 @@ export const spin = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Theme not found or not active' });
     }
 
-    // Parse theme configuration
-    const themeConfig = theme.jsonSchema as unknown as ThemeConfig;
+    // Parse theme configuration - support both manifest and strict schema formats
+    const jsonSchema = theme.jsonSchema as any;
+    
+    // Check if this is the UI manifest format (has components and base_path)
+    if (Array.isArray(jsonSchema.components) && typeof jsonSchema.base_path === 'string') {
+      return res.status(400).json({ 
+        error: 'Theme must be configured with full schema before playing. Please ensure theme has grid, symbols, and paylines configured.' 
+      });
+    }
+
+    // Parse as strict schema format
+    const themeConfig = jsonSchema as unknown as ThemeConfig;
+
+    // Validate theme config has all required properties for spinning
+    if (!themeConfig.grid || !themeConfig.symbols || !themeConfig.paylines) {
+      return res.status(400).json({
+        error: 'Invalid theme configuration. Theme must have grid, symbols, and paylines.',
+      });
+    }
+
+    if (!Array.isArray(themeConfig.symbols) || themeConfig.symbols.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid theme configuration. Theme must have at least one symbol.',
+      });
+    }
 
     // Validate global RTP limits (ensure theme config doesn't bypass limits)
     const globalMinRtp = parseFloat(process.env.GLOBAL_MIN_RTP || '85');

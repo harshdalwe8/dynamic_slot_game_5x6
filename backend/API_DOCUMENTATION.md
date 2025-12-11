@@ -383,41 +383,110 @@ curl -X GET http://localhost:5000/api/spin/audit/550e8400-e29b-41d4-a716-4466554
 **Access**: SUPER_ADMIN, GAME_MANAGER, SUPPORT_STAFF  
 **Description**: Create a new slot theme
 
-**Request Body**:
+**Request Body** (supports two formats):
+
+**Format 1: UI Theme Manifest** (recommended):
 ```json
 {
   "name": "Wild West Adventure",
   "jsonSchema": {
-    "symbols": ["A", "K", "Q", "J", "10", "WILD", "SCATTER"],
-    "reels": 5,
-    "rows": 6,
-    "paylines": 30,
-    "minBet": 10,
-    "maxBet": 1000,
-    "payouts": {
-      "A": [5, 25, 100],
-      "K": [4, 20, 80]
-    }
+    "theme_id": "wild-west-001",
+    "theme_name": "Wild West Adventure",
+    "base_path": "themes/wildwest/",
+    "components": [
+      {
+        "placeholder": "ui.balance",
+        "file_name": "Balance.png",
+        "url": "themes/wildwest/Balance.png"
+      },
+      {
+        "placeholder": "background.main",
+        "file_name": "BKG.png",
+        "url": "themes/wildwest/BKG.png"
+      }
+    ]
   },
   "assetManifest": {
-    "background": "backgrounds/wildwest.png",
-    "symbols": {
-      "A": "symbols/a.png",
-      "K": "symbols/k.png"
-    }
+    "base_path": "themes/wildwest/",
+    "components": [
+      {
+        "placeholder": "ui.balance",
+        "file_name": "Balance.png",
+        "url": "themes/wildwest/Balance.png"
+      }
+    ]
   }
 }
 ```
 
-**cURL Example**:
+**Format 2: Strict Game Schema** (legacy):
+```json
+{
+  "name": "Egyptian Gold",
+  "jsonSchema": {
+    "themeId": "egyptian-gold-001",
+    "name": "Egyptian Gold",
+    "version": 1,
+    "grid": {
+      "rows": 6,
+      "columns": 5
+    },
+    "symbols": [
+      {
+        "id": "A",
+        "name": "Ace",
+        "asset": "symbols/a.png",
+        "weight": 10,
+        "paytable": [5, 25, 100]
+      }
+    ],
+    "paylines": [
+      {
+        "id": "line1",
+        "positions": [[0,0], [1,0], [2,0], [3,0], [4,0]]
+      }
+    ],
+    "bonusRules": {
+      "scatterTriggerCount": 3,
+      "freeSpins": 10,
+      "multiplier": 2
+    },
+    "jackpotRules": {
+      "type": "progressive",
+      "value": 5000
+    }
+  },
+  "assetManifest": {
+    "assets": [
+      {
+        "filename": "background.png",
+        "originalName": "background.png",
+        "mimetype": "image/png",
+        "size": 524288,
+        "url": "http://localhost:5000/uploads/themes/theme-uuid/background.png"
+      }
+    ]
+  }
+}
+```
+
+**cURL Example** (UI Format):
 ```bash
 curl -X POST http://localhost:5000/api/admin/themes \
   -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Wild West Adventure",
-    "jsonSchema": {...},
-    "assetManifest": {...}
+    "jsonSchema": {
+      "theme_id": "wild-west-001",
+      "theme_name": "Wild West Adventure",
+      "base_path": "themes/wildwest/",
+      "components": [{"placeholder": "ui.balance", "file_name": "Balance.png", "url": "themes/wildwest/Balance.png"}]
+    },
+    "assetManifest": {
+      "base_path": "themes/wildwest/",
+      "components": [{"placeholder": "ui.balance", "file_name": "Balance.png", "url": "themes/wildwest/Balance.png"}]
+    }
   }'
 ```
 
@@ -425,7 +494,7 @@ curl -X POST http://localhost:5000/api/admin/themes \
 ```json
 {
   "theme": {
-    "id": "uuid",
+    "id": "wild-west-001",
     "name": "Wild West Adventure",
     "version": 1,
     "status": "DRAFT",
@@ -678,34 +747,34 @@ curl -X POST http://localhost:5000/api/admin/upload/theme-assets/550e8400-e29b-4
 
 ---
 
-### 20. Upload Theme JSON
-**Endpoint**: `POST /api/admin/upload/theme-json`  
-**Access**: SUPER_ADMIN, GAME_MANAGER, SUPPORT_STAFF  
-**Description**: Upload a JSON file to create a new theme
+### 20. Upload Theme JSON (Removed)
+The `POST /api/admin/upload/theme-json` endpoint has been removed.
 
-**Request**: multipart/form-data with field name "theme"
+Create themes by sending the theme manifest in the request body to the theme creation endpoint and then upload any assets separately:
 
-**cURL Example**:
+- Create theme manifest via: `POST /api/admin/themes` (include `jsonSchema` and `assetManifest` in the JSON body).
+- Upload theme assets via: `POST /api/admin/upload/theme-assets/:themeId` (multipart/form-data field `assets`).
+
+Example (create theme JSON manifest via request body):
 ```bash
-curl -X POST http://localhost:5000/api/admin/upload/theme-json \
+curl -X POST http://localhost:5000/api/admin/themes \
   -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
-  -F "theme=@/path/to/theme-config.json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Wild West Adventure",
+    "jsonSchema": { /* schema here */ },
+    "assetManifest": { /* paths here */ }
+  }'
 ```
 
-**Response**:
-```json
-{
-  "message": "Theme created from JSON successfully",
-  "theme": {
-    "id": "uuid",
-    "name": "New Theme",
-    "version": 1,
-    "status": "DRAFT"
-  }
-}
+Then upload assets:
+```bash
+curl -X POST http://localhost:5000/api/admin/upload/theme-assets/THEME_UUID \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
+  -F "assets=@/path/to/background.png" \
+  -F "assets=@/path/to/symbol_a.png"
 ```
 
----
 
 ### 21. Upload Single Image
 **Endpoint**: `POST /api/admin/upload/image`  

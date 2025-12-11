@@ -146,33 +146,33 @@ export async function executeSpinTransaction(
   winAmount: number,
   spinId: string
 ): Promise<{ newBalance: number }> {
-  return await (prisma.$transaction as any)(async (tx: any) => {
-    // Get current wallet
-    const wallet = await tx.wallet.findUnique({
-      where: { userId },
-    });
-    
-    if (!wallet) {
-      throw new Error('Wallet not found');
-    }
-    
-    // Calculate net change
-    const netChange = winAmount - betAmount;
-    const newBalance = wallet.balance + netChange;
-    
-    // Prevent negative balance
-    if (newBalance < 0) {
-      throw new Error('Insufficient balance');
-    }
-    
-    // Update wallet
-    await tx.wallet.update({
+  // First get the current wallet balance
+  const wallet = await prisma.wallet.findUnique({
+    where: { userId },
+  });
+
+  if (!wallet) {
+    throw new Error('Wallet not found');
+  }
+
+  // Calculate net change
+  const netChange = winAmount - betAmount;
+  const newBalance = wallet.balance + netChange;
+
+  // Prevent negative balance
+  if (newBalance < 0) {
+    throw new Error('Insufficient balance');
+  }
+
+  // Use batch transaction to execute all updates atomically
+  await prisma.$transaction([
+    // Update wallet balance
+    prisma.wallet.update({
       where: { userId },
       data: { balance: newBalance },
-    });
-    
+    }),
     // Create debit transaction for bet
-    await tx.transaction.create({
+    prisma.transaction.create({
       data: {
         userId,
         amount: -betAmount,
@@ -181,11 +181,10 @@ export async function executeSpinTransaction(
         reference: spinId,
         reason: 'Spin bet',
       },
-    });
-    
+    }),
     // Create credit transaction for win (if any)
-    if (winAmount > 0) {
-      await tx.transaction.create({
+    ...(winAmount > 0 ? [
+      prisma.transaction.create({
         data: {
           userId,
           amount: winAmount,
@@ -194,11 +193,11 @@ export async function executeSpinTransaction(
           reference: spinId,
           reason: 'Spin win',
         },
-      });
-    }
-    
-    return { newBalance };
-  });
+      }),
+    ] : []),
+  ]);
+
+  return { newBalance };
 }
 
 /**

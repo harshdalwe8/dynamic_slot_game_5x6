@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { spinSlot, getWalletBalance, getActiveThemes, Theme } from '../services/playerApi';
+import { useLocation, useHistory } from 'react-router-dom';
 import styled, { keyframes, css } from 'styled-components';
 
 // ============= KEYFRAME ANIMATIONS =============
@@ -479,6 +480,9 @@ const WinMessage = styled.div`
 
 // ============= COMPONENT =============
 const SlotMachine: React.FC = () => {
+  const location = useLocation();
+  const history = useHistory();
+  
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [grid, setGrid] = useState<string[][]>([]);
@@ -512,12 +516,30 @@ const SlotMachine: React.FC = () => {
       const data = await getActiveThemes();
       if (data.themes && data.themes.length > 0) {
         setThemes(data.themes);
-        setSelectedTheme(data.themes[0]);
+        
+        // Extract themeId from URL query parameters
+        const params = new URLSearchParams(location.search);
+        const themeId = params.get('themeId');
+        
+        if (themeId) {
+          // Find theme matching the URL parameter
+          const selectedThemeFromUrl = data.themes.find(t => t.id === themeId);
+          if (selectedThemeFromUrl) {
+            setSelectedTheme(selectedThemeFromUrl);
+          } else {
+            // Theme not found, redirect back to theme selection
+            console.warn(`Theme with ID ${themeId} not found, redirecting to theme selection`);
+            history.push('/themes');
+          }
+        } else {
+          // No themeId in URL, use first theme as fallback
+          setSelectedTheme(data.themes[0]);
+        }
       }
     } catch (err) {
       console.error('Failed to load themes:', err);
     }
-  }, []);
+  }, [location.search, history]);
 
   const fetchBalance = useCallback(async () => {
     try {
@@ -620,7 +642,8 @@ const SlotMachine: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Spin failed. Please try again.');
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Spin failed. Please try again.';
+      setError(errorMsg);
       console.error('Spin error:', err);
     } finally {
       setIsSpinning(false);

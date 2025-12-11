@@ -94,7 +94,7 @@ export const uploadThemeAssets = multer({
   fileFilter: themeAssetFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB per file
-    files: 20, // Max 20 files per request
+    files: 100, // Max 100 files per request
   },
 });
 

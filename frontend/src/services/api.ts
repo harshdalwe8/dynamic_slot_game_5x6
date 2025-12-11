@@ -15,7 +15,6 @@ export {
   deleteTheme,
   // File Upload
   uploadThemeAssets,
-  uploadThemeJSON,
   uploadImage,
   listAllAssets,
   listThemeAssets,

@@ -1,14 +1,13 @@
 import express from 'express';
 import {
   uploadThemeAssetsEndpoint,
-  uploadThemeJSONEndpoint,
   uploadImageEndpoint,
   deleteAssetEndpoint,
   listAssetsEndpoint,
   listThemeAssetsEndpoint,
 } from '../controllers/uploadController';
 import { authenticate, requireAdmin } from '../middleware/auth';
-import { uploadThemeAssets, uploadJSON, uploadImage } from '../config/multer';
+import { uploadThemeAssets, uploadImage } from '../config/multer';
 
 const router = express.Router();
 
@@ -23,12 +22,7 @@ router.use(requireAdmin);
  */
 router.post('/theme-assets/:themeId', uploadThemeAssets.array('assets', 20), uploadThemeAssetsEndpoint);
 
-/**
- * POST /api/admin/upload/theme-json
- * Upload a JSON file to create a new theme
- * Accepts: multipart/form-data with field name "theme"
- */
-router.post('/theme-json', uploadJSON.single('theme'), uploadThemeJSONEndpoint);
+// (theme-json endpoint removed)
 
 /**
  * POST /api/admin/upload/image

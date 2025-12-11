@@ -1,8 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../config/db';
-import { getFileUrl, deleteUploadedFiles, validateThemeJSON } from '../config/multer';
-import { validateThemeJson } from '../utils/themeValidator';
+import { getFileUrl, deleteUploadedFiles } from '../config/multer';
 import fs from 'fs';
 import path from 'path';
 
@@ -40,13 +39,60 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
       path: file.path,
     }));
 
-    // Update theme's asset manifest
-    const currentManifest = (theme.assetManifest as any) || { assets: [] };
-    const updatedManifest = {
-      ...currentManifest,
-      assets: [...(currentManifest.assets || []), ...uploadedAssets],
-      updatedAt: new Date().toISOString(),
-    };
+    // Update theme's asset manifest. Support two shapes:
+    // - New style: { base_path: string, components: [{ placeholder, file_name, url }] }
+    // - Legacy style: { assets: [ { filename, originalName, ... } ] }
+    const currentManifest = (theme.assetManifest as any) || {};
+    const now = new Date().toISOString();
+    let updatedManifest: any = {};
+
+    if (Array.isArray(currentManifest.components)) {
+      // Default/theme-driven flow: update components entries
+      const basePath = currentManifest.base_path || `themes/${themeId}/`;
+      const components: any[] = currentManifest.components.map((c: any) => ({ ...c }));
+
+      for (const file of files) {
+        const orig = file.originalname;
+        const fileUrl = getFileUrl(file);
+
+        // Try to match by component.file_name (decoded) or by file name equality
+        const matchIndex = components.findIndex((c) => {
+          const candidate = (c.file_name || '').toString();
+          try {
+            if (decodeURIComponent(candidate) === orig) return true;
+          } catch (_) {}
+          if (candidate === orig) return true;
+          if (candidate && candidate.toLowerCase() === orig.toLowerCase()) return true;
+          return false;
+        });
+
+        if (matchIndex >= 0) {
+          components[matchIndex] = {
+            ...components[matchIndex],
+            file_name: file.filename,
+            url: fileUrl,
+          };
+        } else {
+          // Add as a new component entry if no matching placeholder
+          const placeholder = path.parse(orig).name;
+          components.push({ placeholder, file_name: file.filename, url: fileUrl });
+        }
+      }
+
+      updatedManifest = {
+        ...currentManifest,
+        base_path: currentManifest.base_path || basePath,
+        components,
+        updatedAt: now,
+      };
+    } else {
+      // Legacy flow: keep previous behavior where assets is an array of objects
+      updatedManifest = {
+        ...currentManifest,
+        assets: [...(currentManifest.assets || []), ...uploadedAssets],
+        updatedAt: now,
+      };
+    }
 
     await prisma.theme.update({
       where: { id: themeId },
@@ -54,6 +100,22 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
         assetManifest: updatedManifest as any,
       },
     });
+
+    // Optionally create a theme version snapshot (captures assets change)
+    try {
+      await prisma.themeVersion.create({
+        data: {
+          themeId: themeId,
+          version: theme.version,
+          json: theme.jsonSchema,
+          assets: updatedManifest as any,
+          notes: 'Assets upload',
+        },
+      });
+    } catch (verr) {
+      // non-fatal: log and continue
+      console.warn('Failed to create themeVersion snapshot:', verr);
+    }
 
     // Log admin action
     await prisma.adminLog.create({
@@ -90,109 +152,7 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
   }
 };
 
-/**
- * POST /api/admin/upload/theme-json
- * Upload and create theme from JSON file
- */
-export const uploadThemeJSONEndpoint = async (req: AuthRequest, res: Response) => {
-  try {
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    // Validate JSON structure
-    let themeConfig;
-    try {
-      themeConfig = await validateThemeJSON(file.path);
-    } catch (error: any) {
-      deleteUploadedFiles(file);
-      return res.status(400).json({ error: error.message });
-    }
-
-    // Validate against schema
-    const validation = validateThemeJson(themeConfig);
-    if (!validation.valid) {
-      deleteUploadedFiles(file);
-      return res.status(400).json({
-        error: 'Theme validation failed',
-        errors: validation.errors,
-      });
-    }
-
-    // Create theme in database
-    const theme = await prisma.theme.create({
-      data: {
-        name: themeConfig.name,
-        version: 1,
-        status: 'DRAFT',
-        jsonSchema: themeConfig as any,
-        assetManifest: {
-          uploadedFile: file.filename,
-          uploadedAt: new Date().toISOString(),
-          assets: [],
-        } as any,
-        createdBy: req.user!.id,
-      },
-    });
-
-    // Create initial version
-    await prisma.themeVersion.create({
-      data: {
-        themeId: theme.id,
-        version: 1,
-        json: themeConfig as any,
-        assets: {} as any,
-        notes: 'Initial version from uploaded JSON',
-      },
-    });
-
-    // Create paylines
-    if (themeConfig.paylines && themeConfig.paylines.length > 0) {
-      await prisma.payline.createMany({
-        data: themeConfig.paylines.map((payline: any) => ({
-          themeId: theme.id,
-          definition: payline as any,
-        })),
-      });
-    }
-
-    // Log admin action
-    await prisma.adminLog.create({
-      data: {
-        adminId: req.user!.id,
-        action: 'UPLOAD_THEME_JSON',
-        objectType: 'theme',
-        objectId: theme.id,
-        payload: {
-          filename: file.filename,
-          themeName: theme.name,
-        },
-        ip: req.ip || 'unknown',
-      },
-    });
-
-    res.status(201).json({
-      message: 'Theme created successfully from JSON',
-      theme: {
-        id: theme.id,
-        name: theme.name,
-        version: theme.version,
-        status: theme.status,
-      },
-    });
-  } catch (error: any) {
-    console.error('Upload theme JSON error:', error);
-    
-    // Clean up uploaded file on error
-    if (req.file) {
-      deleteUploadedFiles(req.file);
-    }
-    
-    res.status(500).json({ error: 'Failed to create theme from JSON' });
-  }
-};
+// (uploadThemeJSONEndpoint removed)
 
 /**
  * POST /api/admin/upload/image
