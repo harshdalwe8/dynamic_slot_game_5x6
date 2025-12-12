@@ -167,7 +167,7 @@ export const deleteThemeAssets = (themeId: string) => {
 
 // Helper function to get file URL
 export const getFileUrl = (file: Express.Multer.File): string => {
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
   const relativePath = file.path.replace(uploadDir, '').replace(/\\/g, '/');
   return `${baseUrl}/uploads${relativePath}`;
 };

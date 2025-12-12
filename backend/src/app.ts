@@ -25,7 +25,7 @@ import { setSocketService } from './services/socketServiceInstance';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // Create HTTP server and Socket.IO
 const httpServer = createServer(app);
@@ -42,7 +42,9 @@ app.use(cors());
 app.use(morgan('dev')); // Logging
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(globalLimiter); // Rate limiting
+if (process.env.NODE_ENV !== 'test') {
+  app.use(globalLimiter); // Rate limiting
+}
 
 // Health check
 app.get('/health', (req, res) => {
@@ -64,7 +66,9 @@ app.use('/api/admin/reports', reportRoutes);
 app.use('/api/admin/export', exportRoutes);
 app.use('/api/admin/upload', uploadRoutes);
 app.use('/api/gamification', gamificationRoutes);
-app.use('/api/demo', demoRoutes);
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/demo', demoRoutes);
+}
 
 // Error handler (must be last)
 app.use(errorHandler);
@@ -111,4 +115,8 @@ process.on('SIGINT', async () => {
   });
 });
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+export default app;

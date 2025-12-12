@@ -47,11 +47,9 @@ demoRoutes.post('/spin', async (req: Request, res: Response) => {
 
     // Return demo result (no wallet transaction, no logging)
     return res.status(200).json({
-      result: spinResult.result,
+      matrix: spinResult.matrix,
       winAmount: spinResult.winAmount,
-      winningLines: spinResult.winningLines,
-      multiplier: spinResult.multiplier,
-      rtpApplied: spinResult.rtpApplied,
+      winningLines: spinResult.winningLines || [],
     });
   } catch (error: any) {
     console.error('Demo spin error:', error);
@@ -82,10 +80,8 @@ demoRoutes.get('/themes/:themeId/preview', async (req: Request, res: Response) =
     return res.status(200).json({
       id: theme.id,
       name: theme.name,
-      description: theme.description,
-      minBet: (theme.jsonSchema as any).minBet || 10,
-      maxBet: (theme.jsonSchema as any).maxBet || 500,
-      rtp: (theme.jsonSchema as any).rtp || 96.5,
+      minBet: theme.minBet,
+      maxBet: theme.maxBet,
       status: theme.status,
       createdAt: theme.createdAt,
     });

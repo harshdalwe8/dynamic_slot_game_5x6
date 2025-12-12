@@ -7,7 +7,7 @@ import path from 'path';
 
 /**
  * POST /api/admin/upload/theme-assets/:themeId
- * Upload multiple assets for a theme
+ * Upload multiple UI assets for a theme (balance, background, buttons, reels, etc.)
  */
 export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response) => {
   try {
@@ -24,7 +24,85 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
     });
 
     if (!theme) {
-      // Delete uploaded files
+      deleteUploadedFiles(files);
+      return res.status(404).json({ error: 'Theme not found' });
+    }
+
+    // Create theme directory structure: public/theme/{theme_name}/assets/
+    const themeName = theme.name.toLowerCase().replace(/\s+/g, '_');
+    const assetsDir = path.join(process.cwd(), 'public', 'theme', themeName, 'assets');
+    
+    if (!fs.existsSync(assetsDir)) {
+      fs.mkdirSync(assetsDir, { recursive: true });
+    }
+
+    const movedFiles: Array<{ key: string; filename: string; originalName: string; path: string; url: string; }> = [];
+
+    try {
+      for (const file of files) {
+        const assetKey = path.parse(file.originalname).name;
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+
+        if (!allowedExts.includes(ext)) {
+          throw new Error(`Unsupported file type: ${ext}`);
+        }
+
+        const newFilename = `${assetKey}${ext}`;
+        const newPath = path.join(assetsDir, newFilename);
+
+        // Move file from temp upload location to theme assets directory
+        fs.renameSync(file.path, newPath);
+
+        movedFiles.push({
+          key: assetKey,
+          filename: newFilename,
+          originalName: file.originalname,
+          path: `public/theme/${themeName}/assets/${newFilename}`,
+          url: `/theme/${themeName}/assets/${newFilename}`,
+        });
+      }
+    } catch (err: any) {
+      deleteUploadedFiles(files);
+      movedFiles.forEach((file) => {
+        const fullPath = path.join(process.cwd(), file.path);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      });
+      return res.status(400).json({ error: err.message || 'Invalid assets' });
+    }
+
+    res.json({
+      message: 'Theme assets uploaded successfully',
+      files: movedFiles,
+      themeDirectory: `public/theme/${themeName}/assets`,
+    });
+  } catch (error: any) {
+    console.error('Upload theme assets error:', error);
+    res.status(500).json({ error: 'Failed to upload theme assets' });
+  }
+};
+
+/**
+ * POST /api/admin/upload/theme-symbols/:themeId
+ * Upload symbol images for a theme
+ */
+export const uploadThemeSymbolsEndpoint = async (req: AuthRequest, res: Response) => {
+  try {
+    const { themeId } = req.params;
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Verify theme exists
+    const theme = await prisma.theme.findUnique({
+      where: { id: themeId },
+    });
+
+    if (!theme) {
       deleteUploadedFiles(files);
       return res.status(404).json({ error: 'Theme not found' });
     }
@@ -40,12 +118,10 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
     const themeName = theme.name.toLowerCase().replace(/\s+/g, '_');
     const themeDir = path.join(process.cwd(), 'public', 'theme', themeName, 'symbols');
     
-    // Create directories if they don't exist
     if (!fs.existsSync(themeDir)) {
       fs.mkdirSync(themeDir, { recursive: true });
     }
 
-    // Move uploaded files to the correct location based on their original names
     const movedFiles: Array<{ symbolId: string; filename: string; originalName: string; path: string; url: string; }> = [];
 
     try {
@@ -82,7 +158,6 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
         });
       }
     } catch (err: any) {
-      // Clean up on failure
       deleteUploadedFiles(files);
       movedFiles.forEach((file) => {
         const fullPath = path.join(process.cwd(), file.path);
@@ -116,13 +191,13 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
     }
 
     res.json({
-      message: 'Assets uploaded successfully',
+      message: 'Symbols uploaded successfully',
       files: movedFiles,
       themeDirectory: `public/theme/${themeName}/symbols`,
     });
   } catch (error: any) {
-    console.error('Upload theme assets error:', error);
-    res.status(500).json({ error: 'Failed to upload assets' });
+    console.error('Upload theme symbols error:', error);
+    res.status(500).json({ error: 'Failed to upload symbols' });
   }
 };
 

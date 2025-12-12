@@ -7,6 +7,8 @@ import {
   deleteTheme,
   getAllThemes,
   updateTheme,
+  uploadThemeAssets,
+  uploadThemeSymbols,
   CreateThemeRequest,
   Theme,
   UpdateThemeRequest,
@@ -278,26 +280,82 @@ const ThemeCRUD: React.FC = () => {
       return;
     }
 
+    if (!formData.themeId.trim()) {
+      setError('Theme ID is required');
+      return;
+    }
+
+    if (formData.configuration.symbols.length < 3) {
+      setError('At least 3 symbols are required');
+      return;
+    }
+
+    if (formData.configuration.paylines.length < 1) {
+      setError('At least 1 payline is required');
+      return;
+    }
+
     setLoading(true);
+    setError('');
     try {
-      const payload: UpdateThemeRequest = {
+      // Prepare payload with all required strict schema fields
+      const payload: CreateThemeRequest = {
         name: formData.name,
         themeId: formData.themeId,
-        configuration: formData.configuration,
+        configuration: {
+          ...formData.configuration,
+          themeId: formData.themeId,
+          name: formData.name,
+        },
         minBet: formData.minBet,
         maxBet: formData.maxBet,
-      } as any;
+      };
 
+      let themeId: string;
       if (editingId) {
-        await updateTheme(editingId, payload);
+        const result = await updateTheme(editingId, payload as UpdateThemeRequest);
+        themeId = editingId;
+        console.log('Theme updated:', result);
       } else {
-        await createTheme(payload as CreateThemeRequest);
+        const result = await createTheme(payload);
+        themeId = result.theme?.id || formData.themeId;
+        console.log('Theme created:', result);
+      }
+
+      // Upload symbol files if any are selected
+      if (symbolFiles.size > 0) {
+        console.log(`Uploading ${symbolFiles.size} symbol file(s) for theme ${themeId}...`);
+        try {
+          const symbolsRecord = Object.fromEntries(symbolFiles);
+          const uploadResult = await uploadThemeSymbols(themeId, symbolsRecord);
+          console.log('Symbol upload successful:', uploadResult.data);
+        } catch (uploadErr: any) {
+          console.error('Symbol upload failed:', uploadErr);
+          setError(`Theme saved but symbol upload failed: ${uploadErr.response?.data?.error || uploadErr.message}`);
+          // Still reload themes and keep form open for retry
+          await loadThemes();
+          return;
+        }
+      }
+
+      // Upload theme assets if any are selected
+      const selectedAssets = Object.entries(themeAssetFiles).filter(([_, file]) => file !== null);
+      if (selectedAssets.length > 0) {
+        console.log(`Uploading ${selectedAssets.length} theme asset(s)...`);
+        try {
+          await uploadThemeAssets(themeId, themeAssetFiles);
+          console.log('Theme assets uploaded successfully');
+        } catch (assetErr: any) {
+          console.warn('Theme asset upload warning:', assetErr.message);
+          // Continue even if assets fail
+        }
       }
 
       await loadThemes();
       resetForm();
     } catch (err: any) {
-      setError(err.message || 'Failed to save theme');
+      console.error('Theme save error:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save theme');
     } finally {
       setLoading(false);
     }
@@ -694,10 +752,34 @@ const ThemeCRUD: React.FC = () => {
                     <span style={{ color: '#2196f3', fontWeight: 'bold' }}>Scatter: {typeCounts.scatter || 0}</span>
                     <span style={{ color: '#e91e63', fontWeight: 'bold' }}>Jackpot: {typeCounts.jackpot || 0}</span>
                     <span>Bonus: {typeCounts.bonus || 0}</span>
-                    <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>Total Weight: {totalWeight}</span>
                   </div>
                 );
               })()}
+
+              {symbolFiles.size > 0 && (
+                <div
+                  style={{
+                    background: '#d4edda',
+                    border: '1px solid #28a745',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    marginBottom: '15px',
+                    fontSize: '13px',
+                  }}
+                >
+                  <strong style={{ color: '#155724' }}>📁 Symbol Files Queued for Upload ({symbolFiles.size}):</strong>
+                  <ul style={{ margin: '8px 0 0 20px', color: '#155724' }}>
+                    {Array.from(symbolFiles.entries()).map(([symbolId, file]) => (
+                      <li key={symbolId}>
+                        <strong>{symbolId}</strong> → {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                      </li>
+                    ))}
+                  </ul>
+                  <small style={{ color: '#155724', marginTop: '8px', display: 'block' }}>
+                    ✓ These files will be uploaded to <code>/theme/&lt;theme_name&gt;/symbols/</code> after the theme is saved.
+                  </small>
+                </div>
+              )}
 
               {(() => {
                 if (!groupByType) {

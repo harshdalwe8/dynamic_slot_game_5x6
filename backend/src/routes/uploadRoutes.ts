@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   uploadThemeAssetsEndpoint,
+  uploadThemeSymbolsEndpoint,
   uploadImageEndpoint,
   deleteAssetEndpoint,
   listAssetsEndpoint,
@@ -27,7 +28,7 @@ router.post('/theme-assets/:themeId', uploadThemeAssets.array('assets', 20), upl
  * Upload theme symbol images
  * Accepts: multipart/form-data with field name "symbols"
  */
-router.post('/theme-symbols/:themeId', uploadThemeAssets.array('symbols', 50), uploadThemeAssetsEndpoint);
+router.post('/theme-symbols/:themeId', uploadThemeAssets.array('symbols', 50), uploadThemeSymbolsEndpoint);
 
 // (theme-json endpoint removed)
 

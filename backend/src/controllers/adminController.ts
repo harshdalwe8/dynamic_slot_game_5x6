@@ -172,6 +172,9 @@ export const updateTheme = async (req: AuthRequest, res: Response) => {
     // Merge minBet/maxBet if provided
     const enhancedJsonSchema = updatedJsonSchema ? {
       ...updatedJsonSchema,
+      // Ensure themeId is present for validation; prefer body themeId, else param or existing
+      themeId: (updatedJsonSchema as any).themeId || (req.body.themeId as string) || existingTheme.id,
+      name: name || (updatedJsonSchema as any).name || existingTheme.name,
       ...(minBet !== undefined && { minBet }),
       ...(maxBet !== undefined && { maxBet }),
     } : null;
