@@ -71,7 +71,7 @@ const themeSchema: any = {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string', minLength: 1 },
+          id: { oneOf: [{ type: 'string' }, { type: 'number' }] },
           positions: {
             type: 'array',
             items: {

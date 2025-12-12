@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../config/db';
 import { Parser } from 'json2csv';
+import { getRTPBreakdown } from '../services/rtpService';
 
 /**
  * GET /api/admin/export/spins - Export spin logs to CSV
@@ -231,50 +232,21 @@ export const exportRTPReportCSV = async (req: AuthRequest, res: Response) => {
     const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate as string) : new Date();
 
-    const themes = await prisma.theme.findMany({
-      select: {
-        id: true,
-        name: true,
-        status: true,
-      },
-    });
+    const breakdown = await getRTPBreakdown(start, end);
 
-    const rtpData = await Promise.all(
-      themes.map(async (theme) => {
-        const spins = await prisma.spin.findMany({
-          where: {
-            themeId: theme.id,
-            createdAt: {
-              gte: start,
-              lte: end,
-            },
-          },
-          select: {
-            betAmount: true,
-            winAmount: true,
-          },
-        });
-
-        const totalSpins = spins.length;
-        const totalBet = spins.reduce((sum, s) => sum + s.betAmount, 0);
-        const totalWin = spins.reduce((sum, s) => sum + s.winAmount, 0);
-        const rtp = totalBet > 0 ? (totalWin / totalBet) * 100 : 0;
-
-        return {
-          themeId: theme.id,
-          themeName: theme.name,
-          status: theme.status,
-          totalSpins,
-          totalBet,
-          totalWin,
-          rtp: rtp.toFixed(2),
-          period: `${start.toISOString()} to ${end.toISOString()}`,
-        };
-      })
-    );
+    const csvRows = breakdown.map((row) => ({
+      themeId: row.themeId,
+      themeName: row.themeName,
+      status: row.status,
+      totalSpins: row.totalSpins,
+      totalBet: row.totalBet,
+      totalWin: row.totalWin,
+      rtp: row.rtp.toFixed(2),
+      period: `${start.toISOString()} to ${end.toISOString()}`,
+    }));
 
     const parser = new Parser();
-    const csv = parser.parse(rtpData);
+    const csv = parser.parse(csvRows);
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename=rtp-report-${Date.now()}.csv`);
@@ -288,7 +260,7 @@ export const exportRTPReportCSV = async (req: AuthRequest, res: Response) => {
         objectType: 'report',
         objectId: 'rtp',
         payload: { 
-          themes: themes.length, 
+          themes: breakdown.length, 
           period: { 
             start: start.toISOString(), 
             end: end.toISOString() 

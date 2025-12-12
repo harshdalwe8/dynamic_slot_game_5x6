@@ -3,12 +3,16 @@ import { useHistory } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getActiveThemes, Theme } from '../services/playerApi';
 import styled from 'styled-components';
+import PreviewModal from './PreviewModal';
+import ThemePreview from './ThemePreview';
 
 const ThemeSelection: React.FC = () => {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
+  const [previewTheme, setPreviewTheme] = useState<Theme | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const { user, logout } = useAuth();
   const history = useHistory();
 
@@ -34,6 +38,16 @@ const ThemeSelection: React.FC = () => {
     setSelectedThemeId(themeId);
     // Navigate to game with theme ID in query params
     history.push(`/game?themeId=${themeId}`);
+  };
+
+  const handlePreviewTheme = (theme: Theme) => {
+    setPreviewTheme(theme);
+    setShowPreview(true);
+  };
+
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewTheme(null);
   };
 
   const handleLogout = () => {
@@ -75,12 +89,24 @@ const ThemeSelection: React.FC = () => {
                   <InfoItem>Min Bet: ${theme.minBet}</InfoItem>
                   <InfoItem>Max Bet: ${theme.maxBet}</InfoItem>
                 </ThemeInfo>
-                <SelectButton>Select Theme</SelectButton>
+                <ButtonContainer>
+                  <SelectButton>Play Now</SelectButton>
+                  <PreviewButton onClick={(e) => {
+                    e.stopPropagation();
+                    handlePreviewTheme(theme);
+                  }}>
+                    👁️ Preview
+                  </PreviewButton>
+                </ButtonContainer>
               </ThemeCard>
             ))}
           </ThemesGrid>
         )}
       </Content>
+
+      <PreviewModal isOpen={showPreview} onClose={handleClosePreview}>
+        {previewTheme && <ThemePreview theme={previewTheme} onClose={handleClosePreview} />}
+      </PreviewModal>
     </Container>
   );
 };
@@ -347,6 +373,41 @@ const SelectButton = styled.button`
   @media (max-width: 480px) {
     font-size: 0.9rem;
     padding: 8px 16px;
+  }
+`;
+
+const ButtonContainer = styled.div`
+  display: flex;
+  gap: 10px;
+  width: 100%;
+`;
+
+const PreviewButton = styled.button`
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+  border: 2px solid #ffd700;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: #ffd700;
+    color: #000;
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  @media (max-width: 480px) {
+    font-size: 0.8rem;
+    padding: 8px 10px;
   }
 `;
 

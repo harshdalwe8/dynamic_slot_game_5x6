@@ -85,6 +85,8 @@ model Theme {
   status        ThemeStatus
   jsonSchema    Json
   assetManifest Json
+  minBet        Int            @default(10)
+  maxBet        Int            @default(1000)
   createdBy     String
   createdAt     DateTime       @default(now())
   versions      ThemeVersion[]

@@ -29,130 +29,102 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Theme not found' });
     }
 
-    // Process uploaded files
-    const uploadedAssets = files.map((file) => ({
-      filename: file.filename,
-      originalName: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      url: getFileUrl(file),
-      path: file.path,
-    }));
+    const jsonSchema = theme.jsonSchema as any;
+    const allowedSymbols = new Set(
+      Array.isArray(jsonSchema?.symbols)
+        ? jsonSchema.symbols.map((s: any) => String(s.id).toLowerCase())
+        : []
+    );
 
-    // Update theme's asset manifest. Support two shapes:
-    // - New style: { base_path: string, components: [{ placeholder, file_name, url }] }
-    // - Legacy style: { assets: [ { filename, originalName, ... } ] }
-    const currentManifest = (theme.assetManifest as any) || {};
-    const now = new Date().toISOString();
-    let updatedManifest: any = {};
-
-    if (Array.isArray(currentManifest.components)) {
-      // Default/theme-driven flow: update components entries
-      const basePath = currentManifest.base_path || `themes/${themeId}/`;
-      const components: any[] = currentManifest.components.map((c: any) => ({ ...c }));
-
-      for (const file of files) {
-        const orig = file.originalname;
-        const fileUrl = getFileUrl(file);
-
-        // Try to match by component.file_name (decoded) or by file name equality
-        const matchIndex = components.findIndex((c) => {
-          const candidate = (c.file_name || '').toString();
-          try {
-            if (decodeURIComponent(candidate) === orig) return true;
-          } catch (_) {}
-          if (candidate === orig) return true;
-          if (candidate && candidate.toLowerCase() === orig.toLowerCase()) return true;
-          return false;
-        });
-
-        if (matchIndex >= 0) {
-          components[matchIndex] = {
-            ...components[matchIndex],
-            file_name: file.filename,
-            url: fileUrl,
-          };
-        } else {
-          // Add as a new component entry if no matching placeholder
-          const placeholder = path.parse(orig).name;
-          components.push({ placeholder, file_name: file.filename, url: fileUrl });
-        }
-      }
-
-      updatedManifest = {
-        ...currentManifest,
-        base_path: currentManifest.base_path || basePath,
-        components,
-        updatedAt: now,
-      };
-    } else {
-      // Legacy flow: keep previous behavior where assets is an array of objects
-      updatedManifest = {
-        ...currentManifest,
-        assets: [...(currentManifest.assets || []), ...uploadedAssets],
-        updatedAt: now,
-      };
+    // Create theme directory structure: public/theme/{theme_name}/symbols/
+    const themeName = theme.name.toLowerCase().replace(/\s+/g, '_');
+    const themeDir = path.join(process.cwd(), 'public', 'theme', themeName, 'symbols');
+    
+    // Create directories if they don't exist
+    if (!fs.existsSync(themeDir)) {
+      fs.mkdirSync(themeDir, { recursive: true });
     }
 
-    await prisma.theme.update({
-      where: { id: themeId },
-      data: {
-        assetManifest: updatedManifest as any,
-      },
-    });
+    // Move uploaded files to the correct location based on their original names
+    const movedFiles: Array<{ symbolId: string; filename: string; originalName: string; path: string; url: string; }> = [];
 
-    // Optionally create a theme version snapshot (captures assets change)
     try {
-      await prisma.themeVersion.create({
-        data: {
-          themeId: themeId,
-          version: theme.version,
-          json: theme.jsonSchema,
-          assets: updatedManifest as any,
-          notes: 'Assets upload',
-        },
+      for (const file of files) {
+        const symbolIdRaw = path.parse(file.originalname).name;
+        const symbolId = symbolIdRaw.replace(/[^\w-]/g, '').toLowerCase();
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+
+        if (!symbolId) {
+          throw new Error('Invalid symbol filename');
+        }
+
+        if (allowedSymbols.size > 0 && !allowedSymbols.has(symbolId)) {
+          throw new Error(`Symbol ${symbolId} not defined in theme schema`);
+        }
+
+        if (!allowedExts.includes(ext)) {
+          throw new Error(`Unsupported file type for symbol ${symbolId}`);
+        }
+
+        const newFilename = `${symbolId}${ext}`;
+        const newPath = path.join(themeDir, newFilename);
+
+        // Move file from temp upload location to theme directory
+        fs.renameSync(file.path, newPath);
+
+        movedFiles.push({
+          symbolId,
+          filename: newFilename,
+          originalName: file.originalname,
+          path: `public/theme/${themeName}/symbols/${newFilename}`,
+          url: `/theme/${themeName}/symbols/${newFilename}`,
+        });
+      }
+    } catch (err: any) {
+      // Clean up on failure
+      deleteUploadedFiles(files);
+      movedFiles.forEach((file) => {
+        const fullPath = path.join(process.cwd(), file.path);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
       });
-    } catch (verr) {
-      // non-fatal: log and continue
-      console.warn('Failed to create themeVersion snapshot:', verr);
+      return res.status(400).json({ error: err.message || 'Invalid assets' });
     }
 
-    // Log admin action
-    await prisma.adminLog.create({
-      data: {
-        adminId: req.user!.id,
-        action: 'UPLOAD_THEME_ASSETS',
-        objectType: 'theme',
-        objectId: themeId,
-        payload: {
-          fileCount: files.length,
-          files: uploadedAssets.map((a) => a.filename),
-        },
-        ip: req.ip || 'unknown',
-      },
-    });
+    // Update theme's jsonSchema to reflect new asset paths
+    if (jsonSchema.symbols && Array.isArray(jsonSchema.symbols)) {
+      jsonSchema.symbols = jsonSchema.symbols.map((symbol: any) => {
+        const uploadedFile = movedFiles.find(
+          (f) => f.symbolId === String(symbol.id).toLowerCase()
+        );
+        if (uploadedFile) {
+          return {
+            ...symbol,
+            asset: uploadedFile.path,
+          };
+        }
+        return symbol;
+      });
+      
+      // Update theme in database
+      await prisma.theme.update({
+        where: { id: themeId },
+        data: { jsonSchema },
+      });
+    }
 
-    res.status(200).json({
+    res.json({
       message: 'Assets uploaded successfully',
-      theme: {
-        id: theme.id,
-        name: theme.name,
-      },
-      uploadedAssets,
+      files: movedFiles,
+      themeDirectory: `public/theme/${themeName}/symbols`,
     });
   } catch (error: any) {
     console.error('Upload theme assets error:', error);
-    
-    // Clean up uploaded files on error
-    if (req.files) {
-      deleteUploadedFiles(req.files as Express.Multer.File[]);
-    }
-    
     res.status(500).json({ error: 'Failed to upload assets' });
   }
 };
-
-// (uploadThemeJSONEndpoint removed)
 
 /**
  * POST /api/admin/upload/image

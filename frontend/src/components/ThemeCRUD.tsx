@@ -1,95 +1,181 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import {
-  getAllThemes,
-  createTheme,
-  updateTheme,
   activateTheme,
+  createTheme,
   deactivateTheme,
   deleteTheme,
-  Theme,
+  getAllThemes,
+  updateTheme,
   CreateThemeRequest,
+  Theme,
   UpdateThemeRequest,
 } from '../services/adminApi';
 
-interface FormData extends CreateThemeRequest {
+// Slot symbol typing kept local to keep UI resilient to backend changes
+export type SymbolType = 'regular' | 'wild' | 'scatter' | 'jackpot' | 'bonus';
+
+interface SlotSymbol {
+  id: string;
+  name: string;
+  type: SymbolType;
+  weight: number;
+  paytable: number[];
+  asset?: string;
+}
+
+interface Payline {
+  id: number;
+  positions: number[][];
+}
+
+interface BonusRules {
+  freeSpins: number;
+  multiplier: number;
+  scatterTriggerCount: number;
+}
+
+interface JackpotRules {
+  type: 'fixed' | 'progressive';
+  value: number;
+}
+
+interface GridConfig {
+  rows: number;
+  columns: number;
+}
+
+interface SlotConfiguration {
+  version: number;
+  grid: GridConfig;
+  symbols: SlotSymbol[];
+  paylines: Payline[];
+  bonusRules: BonusRules;
+  jackpotRules: JackpotRules;
+}
+
+interface FormData {
   id?: string;
+  name: string;
+  themeId: string;
+  configuration: SlotConfiguration;
+  minBet: number;
+  maxBet: number;
+  jsonSchema?: unknown;
+  assetManifest?: unknown;
 }
 
-interface ManifestComponent {
-  placeholder: string;
-  file_name: string;
-  url: string;
+interface ThemeAssetItem {
+  key: string;
+  label: string;
 }
 
-interface Manifest {
-  theme_name: string;
-  theme_id: string;
-  base_path: string;
-  components: ManifestComponent[];
-}
+const defaultSymbols: SlotSymbol[] = [
+  { id: 'A', name: 'Ace', type: 'regular', weight: 8, paytable: [5, 15, 40] },
+  { id: 'K', name: 'King', type: 'regular', weight: 8, paytable: [5, 12, 35] },
+  { id: 'Q', name: 'Queen', type: 'regular', weight: 9, paytable: [4, 10, 30] },
+  { id: 'J', name: 'Jack', type: 'regular', weight: 9, paytable: [4, 8, 25] },
+  { id: '10', name: 'Ten', type: 'regular', weight: 10, paytable: [3, 6, 20] },
+  { id: '9', name: 'Nine', type: 'regular', weight: 10, paytable: [3, 5, 18] },
+  { id: 'BROWN', name: 'Brown Gem', type: 'bonus', weight: 7, paytable: [8, 18, 45] },
+  { id: 'LILY', name: 'Lily Gem', type: 'bonus', weight: 7, paytable: [8, 18, 45] },
+  { id: 'PINK', name: 'Pink Gem', type: 'bonus', weight: 7, paytable: [9, 22, 55] },
+  { id: 'RED', name: 'Red Gem', type: 'bonus', weight: 6, paytable: [10, 25, 60] },
+  { id: 'WHITE', name: 'White Gem', type: 'bonus', weight: 6, paytable: [10, 25, 60] },
+  { id: 'YELLOW', name: 'Yellow Gem', type: 'bonus', weight: 6, paytable: [12, 28, 65] },
+  { id: 'GOLD', name: 'Gold Gem', type: 'bonus', weight: 5, paytable: [15, 35, 80] },
+  { id: 'WILD', name: 'Wild Substitute', type: 'wild', weight: 6, paytable: [0, 0, 0] },
+  { id: 'SCATTER', name: 'Scatter Bonus', type: 'scatter', weight: 5, paytable: [0, 0, 0] },
+  { id: 'JACKPOT', name: 'Jackpot Crown', type: 'jackpot', weight: 12, paytable: [25, 60, 150] },
+];
 
-interface ComponentState extends ManifestComponent {
-  file?: File | null;
-}
+const defaultThemeAssets: ThemeAssetItem[] = [
+  { key: 'balance', label: 'Balance' },
+  { key: 'bkg', label: 'BKG (background)' },
+  { key: 'button_hold_hover', label: 'Button Hold Hover' },
+  { key: 'button_hold_normal', label: 'Button Hold Normal' },
+  { key: 'button_info_hover', label: 'Button Info Hover' },
+  { key: 'button_info_normal', label: 'Button Info Normal' },
+  { key: 'button_menu_hover', label: 'Button Menu Hover' },
+  { key: 'button_menu_normal', label: 'Button Menu Normal' },
+  { key: 'button_rules_hover', label: 'Button Rules Hover' },
+  { key: 'button_rules_normal', label: 'Button Rules Normal' },
+  { key: 'button_settings_hover', label: 'Button Settings Hover' },
+  { key: 'button_settings_normal', label: 'Button Settings Normal' },
+  { key: 'button_spin_hover', label: 'Button Spin Hover' },
+  { key: 'button_spin_normal', label: 'Button Spin Normal' },
+  { key: 'lines_button', label: 'Lines Button' },
+  { key: 'lines_label', label: 'Lines' },
+  { key: 'minus_hover', label: 'Minus Hover' },
+  { key: 'minus_normal', label: 'Minus Normal' },
+  { key: 'plus_hover', label: 'Plus Hover' },
+  { key: 'plus_normal', label: 'Plus Normal' },
+  { key: 'progress_base', label: 'Progresbar Base' },
+  { key: 'progress_empty', label: 'Progresbar Empty' },
+  { key: 'progress_full', label: 'Progresbar Full' },
+  { key: 'progress_mask', label: 'Progresbar Mask' },
+  { key: 'progress_full_end', label: 'Progressbar Full End' },
+  { key: 'reels_border', label: 'Reels Border' },
+  { key: 'reels', label: 'Reels' },
+  { key: 'total_bet', label: 'Total Bet' },
+  { key: 'win_line_dot', label: 'Win Line Dot' },
+  { key: 'your_win', label: 'Your Win' },
+];
 
-const DEFAULT_MANIFEST: Manifest = {
-  theme_name: 'Aqua Slot',
-  theme_id: 'aqua_slot_001',
-  base_path: 'themes/aqua-slot/game-screen/png-gui/',
-  components: [
-    { placeholder: 'ui.balance', file_name: 'Balance.png', url: 'themes/aqua-slot/game-screen/png-gui/Balance.png' },
-    { placeholder: 'background.main', file_name: 'BKG.png', url: 'themes/aqua-slot/game-screen/png-gui/BKG.png' },
-    { placeholder: 'button.hold.hover', file_name: 'Button Hold Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Hold Hover.png' },
-    { placeholder: 'button.hold.normal', file_name: 'Button Hold Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Hold Normal.png' },
-    { placeholder: 'button.info.hover', file_name: 'Button Info Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Info Hover.png' },
-    { placeholder: 'button.info.normal', file_name: 'Button Info Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Info Normal.png' },
-    { placeholder: 'button.menu.hover', file_name: 'Button Menu Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Menu Hover.png' },
-    { placeholder: 'button.menu.normal', file_name: 'Button Menu Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Menu Normal.png' },
-    { placeholder: 'button.rules.hover', file_name: 'Button Rules Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Rules Hover.png' },
-    { placeholder: 'button.rules.normal', file_name: 'Button Rules Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Rules Normal.png' },
-    { placeholder: 'button.settings.hover', file_name: 'Button Settings Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Settings Hover.png' },
-    { placeholder: 'button.settings.normal', file_name: 'Button Settings Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Settings Normal.png' },
-    { placeholder: 'button.spin.hover', file_name: 'Button Spin Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Spin Hover.png' },
-    { placeholder: 'button.spin.normal', file_name: 'Button Spin Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Button Spin Normal.png' },
-    { placeholder: 'button.lines', file_name: 'Lines Button.png', url: 'themes/aqua-slot/game-screen/png-gui/Lines Button.png' },
-    { placeholder: 'label.lines', file_name: 'Lines.png', url: 'themes/aqua-slot/game-screen/png-gui/Lines.png' },
-    { placeholder: 'button.minus.hover', file_name: 'Minus Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Minus Hover.png' },
-    { placeholder: 'button.minus.normal', file_name: 'Minus Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Minus Normal.png' },
-    { placeholder: 'button.plus.hover', file_name: 'Plus Hover.png', url: 'themes/aqua-slot/game-screen/png-gui/Plus Hover.png' },
-    { placeholder: 'button.plus.normal', file_name: 'Plus Normal.png', url: 'themes/aqua-slot/game-screen/png-gui/Plus Normal.png' },
-    { placeholder: 'progress.base', file_name: 'Progresbar Base.png', url: 'themes/aqua-slot/game-screen/png-gui/Progresbar Base.png' },
-    { placeholder: 'progress.empty', file_name: 'Progresbar Empty.png', url: 'themes/aqua-slot/game-screen/png-gui/Progresbar Empty.png' },
-    { placeholder: 'progress.full', file_name: 'Progresbar Full.png', url: 'themes/aqua-slot/game-screen/png-gui/Progresbar Full.png' },
-    { placeholder: 'progress.mask', file_name: 'Progresbar Mask.png', url: 'themes/aqua-slot/game-screen/png-gui/Progresbar Mask.png' },
-    { placeholder: 'progress.full_end', file_name: 'Progressbar Full End.png', url: 'themes/aqua-slot/game-screen/png-gui/Progressbar Full End.png' },
-    { placeholder: 'reels.border', file_name: 'Reels Border.png', url: 'themes/aqua-slot/game-screen/png-gui/Reels Border.png' },
-    { placeholder: 'reels.background', file_name: 'Reels.png', url: 'themes/aqua-slot/game-screen/png-gui/Reels.png' },
-    { placeholder: 'label.total_bet', file_name: 'Total Bet.png', url: 'themes/aqua-slot/game-screen/png-gui/Total Bet.png' },
-    { placeholder: 'win.line_dot', file_name: 'Win Line Dot.png', url: 'themes/aqua-slot/game-screen/png-gui/Win Line Dot.png' },
-    { placeholder: 'label.your_win', file_name: 'Your Win.png', url: 'themes/aqua-slot/game-screen/png-gui/Your Win.png' },
-  ],
+const defaultPaylines: Payline[] = [
+  { id: 1, positions: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
+  { id: 2, positions: [[0, 1], [1, 1], [2, 1], [3, 1], [4, 1]] },
+  { id: 3, positions: [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]] },
+  { id: 4, positions: [[0, 0], [1, 1], [2, 2], [3, 1], [4, 0]] },
+  { id: 5, positions: [[0, 2], [1, 1], [2, 0], [3, 1], [4, 2]] },
+];
+
+const defaultConfiguration: SlotConfiguration = {
+  version: 1,
+  grid: { rows: 3, columns: 5 },
+  symbols: defaultSymbols,
+  paylines: defaultPaylines,
+  bonusRules: { freeSpins: 5, multiplier: 2, scatterTriggerCount: 3 },
+  jackpotRules: { type: 'fixed', value: 1000 },
 };
+
+const ensureConfiguration = (config?: Partial<SlotConfiguration>): SlotConfiguration => ({
+  version: config?.version ?? 1,
+  grid: {
+    rows: config?.grid?.rows ?? 3,
+    columns: config?.grid?.columns ?? 5,
+  },
+  symbols: config?.symbols && config.symbols.length > 0 ? config.symbols : defaultSymbols,
+  paylines: config?.paylines ?? [],
+  bonusRules: {
+    freeSpins: config?.bonusRules?.freeSpins ?? 0,
+    multiplier: config?.bonusRules?.multiplier ?? 1,
+    scatterTriggerCount: config?.bonusRules?.scatterTriggerCount ?? 3,
+  },
+  jackpotRules: {
+    type: config?.jackpotRules?.type ?? 'fixed',
+    value: config?.jackpotRules?.value ?? 0,
+  },
+});
 
 const ThemeCRUD: React.FC = () => {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [groupByType, setGroupByType] = useState(false);
+  const [symbolFiles, setSymbolFiles] = useState<Map<string, File>>(new Map());
+  const [themeAssetFiles, setThemeAssetFiles] = useState<Record<string, File | null>>(
+    () => Object.fromEntries(defaultThemeAssets.map((a) => [a.key, null])) as Record<string, File | null>
+  );
   const [formData, setFormData] = useState<FormData>({
     name: '',
-    configuration: {},
+    themeId: '',
+    configuration: defaultConfiguration,
     minBet: 10,
     maxBet: 1000,
   });
-  
-  const [themeIdInput, setThemeIdInput] = useState('');
-  const [basePathInput, setBasePathInput] = useState(DEFAULT_MANIFEST.base_path || '');
-  // the list of selected asset files (both from "bulk upload" and per-placeholder inputs)
-  const [assetFiles, setAssetFiles] = useState<File[]>([]);
-  // componentsState is the editable list derived from manifest.components
-  const [componentsState, setComponentsState] = useState<ComponentState[]>([]);
 
   useEffect(() => {
     loadThemes();
@@ -108,24 +194,85 @@ const ThemeCRUD: React.FC = () => {
     }
   };
 
-  // Load default manifest into componentsState (call when creating new theme)
-  const loadManifestToForm = (manifest?: Manifest) => {
-    const m = manifest || DEFAULT_MANIFEST;
-    setThemeIdInput(m.theme_id || '');
-    setBasePathInput(m.base_path || '');
-    const compState = m.components.map((c) => ({ ...c, file: null }));
-    setComponentsState(compState);
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      themeId: '',
+      configuration: defaultConfiguration,
+      minBet: 10,
+      maxBet: 1000,
+    });
+    setEditingId(null);
+    setSymbolFiles(new Map());
+    setThemeAssetFiles(Object.fromEntries(defaultThemeAssets.map((a) => [a.key, null])) as Record<string, File | null>);
+    setShowForm(false);
   };
 
-  useEffect(() => {
-    // When user opens the create form, pre-load default manifest placeholders
-    if (showForm && !editingId && componentsState.length === 0) {
-      loadManifestToForm();
+  const handleSymbolFileChange = (index: number, file: File | null) => {
+    const symbol = formData.configuration.symbols[index];
+    const next = new Map(symbolFiles);
+    if (file) {
+      next.set(symbol.id, file);
+    } else {
+      next.delete(symbol.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showForm]);
+    setSymbolFiles(next);
+    setFormData((prev) => {
+      const symbols = [...prev.configuration.symbols];
+      symbols[index] = { ...symbols[index], asset: file ? file.name : symbols[index].asset };
+      return { ...prev, configuration: { ...prev.configuration, symbols } };
+    });
+  };
 
-  const handleCreate = async () => {
+  const updateSymbol = <K extends keyof SlotSymbol>(index: number, field: K, value: SlotSymbol[K]) => {
+    setFormData((prev) => {
+      const symbols = [...prev.configuration.symbols];
+      symbols[index] = { ...symbols[index], [field]: value } as SlotSymbol;
+      return { ...prev, configuration: { ...prev.configuration, symbols } };
+    });
+  };
+
+  const addSymbol = () => {
+    setFormData((prev) => {
+      const template = defaultSymbols[prev.configuration.symbols.length % defaultSymbols.length];
+      const clone: SlotSymbol = { ...template, id: `${template.id}_${prev.configuration.symbols.length + 1}` };
+      const nextSymbols = [...prev.configuration.symbols, clone];
+      return { ...prev, configuration: { ...prev.configuration, symbols: nextSymbols } };
+    });
+  };
+
+  const removeSymbol = (index: number) => {
+    setFormData((prev) => {
+      const nextSymbols = prev.configuration.symbols.filter((_, i) => i !== index);
+      return { ...prev, configuration: { ...prev.configuration, symbols: nextSymbols } };
+    });
+  };
+
+  const addPayline = () => {
+    setFormData((prev) => {
+      const cols = prev.configuration.grid.columns;
+      const defaultPositions = Array.from({ length: cols }, (_, c) => [c, 0]);
+      const nextPaylines = [...prev.configuration.paylines, { id: prev.configuration.paylines.length + 1, positions: defaultPositions }];
+      return { ...prev, configuration: { ...prev.configuration, paylines: nextPaylines } };
+    });
+  };
+
+  const updatePayline = (index: number, positions: number[][]) => {
+    setFormData((prev) => {
+      const paylines = [...prev.configuration.paylines];
+      paylines[index] = { ...paylines[index], positions };
+      return { ...prev, configuration: { ...prev.configuration, paylines } };
+    });
+  };
+
+  const removePayline = (index: number) => {
+    setFormData((prev) => {
+      const paylines = prev.configuration.paylines.filter((_, i) => i !== index);
+      return { ...prev, configuration: { ...prev.configuration, paylines } };
+    });
+  };
+
+  const handleCreateOrUpdate = async () => {
     if (!formData.name.trim()) {
       setError('Theme name is required');
       return;
@@ -133,72 +280,22 @@ const ThemeCRUD: React.FC = () => {
 
     setLoading(true);
     try {
+      const payload: UpdateThemeRequest = {
+        name: formData.name,
+        themeId: formData.themeId,
+        configuration: formData.configuration,
+        minBet: formData.minBet,
+        maxBet: formData.maxBet,
+      } as any;
+
       if (editingId) {
-        const payload: UpdateThemeRequest = {
-          name: formData.name,
-          configuration: formData.configuration || {},
-          minBet: formData.minBet,
-          maxBet: formData.maxBet,
-        };
         await updateTheme(editingId, payload);
       } else {
-        // Build manifest from componentsState
-        const themeId = themeIdInput || `${formData.name.toLowerCase().replace(/\s+/g, '_')}`;
-        const basePath = basePathInput || '';
-
-        const components: ManifestComponent[] = componentsState.map((c) => {
-          const outputFileName = c.file ? c.file.name : c.file_name;
-          return {
-            placeholder: c.placeholder,
-            file_name: outputFileName,
-            url: `${basePath}${encodeURIComponent(outputFileName)}`,
-          };
-        });
-
-        const manifest: Manifest = {
-          theme_name: formData.name,
-          theme_id: themeId,
-          base_path: basePath,
-          components,
-        };
-
-        const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
-        const file = new File([blob], `${themeId}.json`, { type: 'application/json' });
-
-        const res = await createTheme({
-          name: formData.name,
-          jsonSchema: manifest,
-          assetManifest: { base_path: basePath, components },
-        } as any);
-        const createdThemeId = res?.theme?.id || res?.id || themeId;
-
-        // collect files to upload: any componentState.file plus global assetFiles
-        const filesToUpload: File[] = [
-          ...assetFiles,
-          ...componentsState.filter((c) => c.file).map((c) => c.file!) // non-null asserted because filtered
-        ];
-
-        if (filesToUpload.length > 0) {
-          // uploadThemeAssets is dynamically imported earlier in your code when used
-          const api = await import('../services/adminApi');
-          if (api.uploadThemeAssets) {
-            await api.uploadThemeAssets(createdThemeId, filesToUpload);
-          } else {
-            console.warn('uploadThemeAssets not found in adminApi');
-          }
-        }
+        await createTheme(payload as CreateThemeRequest);
       }
 
       await loadThemes();
-      // reset form
-      setShowForm(false);
-      setEditingId(null);
-      setFormData({ name: '', configuration: {}, minBet: 10, maxBet: 1000 });
-      setThemeIdInput('');
-      setBasePathInput(DEFAULT_MANIFEST.base_path || '');
-      setAssetFiles([]);
-      setComponentsState([]);
-      setError('');
+      resetForm();
     } catch (err: any) {
       setError(err.message || 'Failed to save theme');
     } finally {
@@ -206,41 +303,28 @@ const ThemeCRUD: React.FC = () => {
     }
   };
 
-  const handleEdit = async (theme: Theme) => {
-    // load theme details (basic) -- if you have theme manifest endpoint you could fetch it and populate componentsState
-    setEditingId(theme.id);
+  const handleEdit = (theme: Theme) => {
+    const configFromTheme = ensureConfiguration((theme as any).configuration);
     setFormData({
       id: theme.id,
       name: theme.name,
-      configuration: theme.configuration || {},
-      minBet: theme.minBet,
-      maxBet: theme.maxBet,
+      themeId: (theme as any).themeId || theme.id,
+      configuration: configFromTheme,
+      minBet: (theme as any).minBet ?? 10,
+      maxBet: (theme as any).maxBet ?? 1000,
     });
-
-    // If the theme contains a stored manifest as part of the theme object (common pattern), use it.
-    // Otherwise, load placeholders from DEFAULT_MANIFEST and let admin replace files manually.
-    const manifest: Manifest | undefined = (theme as any).manifest;
-    if (manifest) {
-      setThemeIdInput(manifest.theme_id || theme.id);
-      setBasePathInput(manifest.base_path || DEFAULT_MANIFEST.base_path);
-      setComponentsState(manifest.components.map((c) => ({ ...c, file: null })));
-    } else {
-      // fallback to default manifest placeholders but try to preserve theme id
-      loadManifestToForm();
-      setThemeIdInput(theme.id);
-    }
-
+    setEditingId(theme.id);
     setShowForm(true);
+    setGroupByType(false);
+    setSymbolFiles(new Map());
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this theme?')) return;
-
     setLoading(true);
     try {
       await deleteTheme(id);
       await loadThemes();
-      setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to delete theme');
     } finally {
@@ -257,7 +341,6 @@ const ThemeCRUD: React.FC = () => {
         await activateTheme(theme.id);
       }
       await loadThemes();
-      setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to update theme status');
     } finally {
@@ -265,34 +348,163 @@ const ThemeCRUD: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    setShowForm(false);
-    setEditingId(null);
-    setFormData({ name: '', configuration: {}, minBet: 10, maxBet: 1000 });
-    setComponentsState([]);
-    setAssetFiles([]);
-    setThemeIdInput('');
-    setBasePathInput(DEFAULT_MANIFEST.base_path || '');
-    setError('');
+  const handleThemeAssetFileChange = (key: string, file: File | null) => {
+    setThemeAssetFiles((prev) => ({ ...prev, [key]: file }));
   };
 
+  const renderSymbolCard = (symbol: SlotSymbol, idx: number) => {
+    const borderColor = symbol.type === 'wild' ? '#ff9800' : symbol.type === 'scatter' ? '#2196f3' : symbol.type === 'jackpot' ? '#e91e63' : symbol.type === 'bonus' ? '#4caf50' : '#ddd';
+    const badgeBg = symbol.type === 'wild' ? '#ff9800' : symbol.type === 'scatter' ? '#2196f3' : symbol.type === 'jackpot' ? '#e91e63' : symbol.type === 'bonus' ? '#4caf50' : '#666';
+    const cardBg = symbol.type === 'wild' ? '#fff9e6' : symbol.type === 'scatter' ? '#e6f7ff' : symbol.type === 'jackpot' ? '#ffe6f0' : symbol.type === 'bonus' ? '#f1f8e9' : 'white';
 
-  // update per-placeholder file
-  const handlePlaceholderFileChange = (index: number, f: File | null) => {
-    setComponentsState((prev) => {
-      const next = [...prev];
-      const item = { ...next[index] } as ComponentState;
-      item.file = f;
-      // if a new file chosen, update file_name for immediate preview/manifest building if desired
-      if (f) item.file_name = f.name;
-      next[index] = item;
-      return next;
-    });
-  };
+    const totalWeight = formData.configuration.symbols.reduce((sum, s) => sum + s.weight, 0);
+    const percentage = totalWeight > 0 ? ((symbol.weight / totalWeight) * 100).toFixed(1) : '0';
 
-  // bulk asset input (files not tied to placeholders)
-  const handleBulkAssetFiles = (files: FileList | null) => {
-    setAssetFiles(files ? Array.from(files) : []);
+    return (
+      <div
+        key={idx}
+        style={{
+          border: `2px solid ${borderColor}`,
+          padding: '15px',
+          marginBottom: '10px',
+          borderRadius: '8px',
+          background: cardBg,
+          position: 'relative',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: badgeBg,
+            color: 'white',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+          }}
+        >
+          {symbol.type === 'wild'
+            ? '🎰 WILD'
+            : symbol.type === 'scatter'
+              ? '✨ SCATTER'
+              : symbol.type === 'jackpot'
+                ? '💎 JACKPOT'
+                : symbol.type === 'bonus'
+                  ? '⭐ BONUS'
+                  : '🎴 REGULAR'}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <div>
+            <Label>Symbol ID</Label>
+            <Input
+              value={symbol.id}
+              onChange={(e) => updateSymbol(idx, 'id', e.target.value)}
+              placeholder="e.g., A"
+            />
+          </div>
+          <div>
+            <Label>Name</Label>
+            <Input
+              value={symbol.name}
+              onChange={(e) => updateSymbol(idx, 'name', e.target.value)}
+              placeholder="e.g., Ace"
+            />
+          </div>
+          <div>
+            <Label>Symbol Icon (PNG)</Label>
+            <Input
+              type="file"
+              accept="image/png"
+              onChange={(e) => handleSymbolFileChange(idx, e.target.files?.[0] || null)}
+            />
+            {symbolFiles.has(symbol.id) && (
+              <small style={{ color: '#28a745', display: 'block', marginTop: '5px' }}>
+                ✓ {symbolFiles.get(symbol.id)?.name}
+              </small>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr', gap: '12px', marginBottom: '10px', alignItems: 'flex-end' }}>
+          <div>
+            <Label>Type</Label>
+            <select
+              value={symbol.type}
+              onChange={(e) => updateSymbol(idx, 'type', e.target.value as SymbolType)}
+              style={{
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                width: '100%',
+              }}
+            >
+              <option value="regular">Regular</option>
+              <option value="wild">Wild (Substitute)</option>
+              <option value="scatter">Scatter (Bonus)</option>
+              <option value="jackpot">Jackpot</option>
+              <option value="bonus">Bonus/Premium</option>
+            </select>
+          </div>
+          <div>
+            <Label>Weight</Label>
+            <Input
+              type="number"
+              value={symbol.weight}
+              onChange={(e) => updateSymbol(idx, 'weight', parseInt(e.target.value) || 0)}
+              min="1"
+            />
+          </div>
+          <div>
+            <Label>Paytable (3, 4, 5 matches)</Label>
+            <Input
+              value={symbol.paytable.join(', ')}
+              onChange={(e) =>
+                updateSymbol(
+                  idx,
+                  'paytable',
+                  e.target.value
+                    .split(',')
+                    .map((v) => parseInt(v.trim()))
+                    .filter((v) => !isNaN(v))
+                )
+              }
+              placeholder="e.g., 10, 50, 250"
+            />
+            <small style={{ color: '#666', display: 'block', marginTop: '5px' }}>
+              Payout for 3/4/5 matching symbols on a payline
+            </small>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: '#f8f9fa',
+            padding: '10px',
+            borderRadius: '6px',
+            marginTop: '10px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div>
+            <small style={{ color: '#666' }}>Appearance Probability:</small>
+            <strong style={{ marginLeft: '8px', color: '#333', fontSize: '14px' }}>
+              {`${percentage}% (${symbol.weight}/${totalWeight})`}
+            </strong>
+          </div>
+          {symbol.asset && <small style={{ color: '#666' }}>📁 {symbol.asset}</small>}
+        </div>
+
+        <SmallButton onClick={() => removeSymbol(idx)} style={{ marginTop: '10px', background: '#ff4444', color: 'white' }}>
+          Remove Symbol
+        </SmallButton>
+      </div>
+    );
   };
 
   return (
@@ -302,8 +514,7 @@ const ThemeCRUD: React.FC = () => {
         <CreateButton
           onClick={() => {
             setShowForm(true);
-            // pre-load manifest if not loaded
-            if (componentsState.length === 0) loadManifestToForm();
+            setEditingId(null);
           }}
           disabled={loading}
         >
@@ -317,104 +528,399 @@ const ThemeCRUD: React.FC = () => {
         <FormContainer>
           <FormTitle>{editingId ? 'Edit Theme' : 'Create New Theme'}</FormTitle>
           <Form>
+            {/* Basic Info */}
             <FormGroup>
               <Label>Theme Name</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Ancient Egypt"
+                placeholder="e.g., Classic Gold"
               />
             </FormGroup>
 
             <FormGroup>
               <Label>Theme ID</Label>
               <Input
-                value={themeIdInput}
-                onChange={(e) => setThemeIdInput(e.target.value)}
-                placeholder="unique_theme_id_001"
+                value={formData.themeId}
+                onChange={(e) => setFormData({ ...formData, themeId: e.target.value })}
+                placeholder="e.g., test-classic-001"
               />
             </FormGroup>
 
             <FormGroup>
-              <Label>Base Path</Label>
+              <Label>Version</Label>
               <Input
-                value={basePathInput}
-                onChange={(e) => setBasePathInput(e.target.value)}
-                placeholder="themes/aqua-slot/game-screen/png-gui/"
+                type="number"
+                value={formData.configuration.version}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    configuration: { ...formData.configuration, version: parseInt(e.target.value) || 1 },
+                  })
+                }
+                min="1"
               />
             </FormGroup>
 
+            {/* Grid Configuration */}
             <FormGroup style={{ gridColumn: '1 / -1' }}>
-              <Label>Bulk Upload Asset Files (optional)</Label>
-              <Input
-                type="file"
-                multiple
-                onChange={(e) => handleBulkAssetFiles(e.target.files)}
-                accept="image/*"
-              />
-              <small style={{ color: '#666' }}>
-                These files will be uploaded in addition to per-placeholder files. For placeholders, use the table below.
-              </small>
-            </FormGroup>
-
-            {/* Per-placeholder inputs */}
-            <FormGroup style={{ gridColumn: '1 / -1' }}>
-              <Label>Placeholders (select file for each placeholder)</Label>
-              <PlaceholderTable>
-                <thead>
-                  <tr>
-                    <th>Placeholder</th>
-                    <th>Current File Name</th>
-                    <th>Upload Replacement</th>
-                    <th>Preview</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {componentsState.map((c, idx) => (
-                    <tr key={c.placeholder}>
-                      <td style={{ width: '35%' }}>
-                        <small style={{ color: '#333' }}>{c.placeholder}</small>
-                      </td>
-                      <td>
-                        <small>{c.file ? c.file.name : c.file_name}</small>
-                      </td>
-                      <td>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handlePlaceholderFileChange(idx, e.target.files ? e.target.files[0] : null)}
-                        />
-                      </td>
-                      <td>
-                        {c.file ? (
-                          <small>{c.file.name}</small>
-                        ) : (
-                          <small style={{ color: '#888' }}>{c.url.split('/').pop()}</small>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </PlaceholderTable>
-
-              <div style={{ marginTop: 8 }}>
-                <SmallButton
-                  onClick={() => {
-                    // Reload default manifest into placeholder list
-                    loadManifestToForm(DEFAULT_MANIFEST);
-                  }}
-                >
-                  Load Default Manifest Placeholders
-                </SmallButton>
+              <Label>Grid Configuration</Label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <Label>Rows</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.grid.rows}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          grid: { ...formData.configuration.grid, rows: parseInt(e.target.value) || 0 },
+                        },
+                      })
+                    }
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <Label>Columns</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.grid.columns}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          grid: { ...formData.configuration.grid, columns: parseInt(e.target.value) || 0 },
+                        },
+                      })
+                    }
+                    min="1"
+                  />
+                </div>
               </div>
             </FormGroup>
 
+            {/* Theme Asset Placeholders */}
+            <FormGroup style={{ gridColumn: '1 / -1' }}>
+              <Label>Theme Assets</Label>
+              <div style={{ background: '#f8faff', padding: '12px', borderRadius: '8px', border: '1px solid #e4ecf7', marginBottom: '10px' }}>
+                <small style={{ color: '#555' }}>Upload PNG assets for the main UI elements.</small>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+                {defaultThemeAssets.map((asset) => (
+                  <div key={asset.key} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px' }}>
+                    <Label>{asset.label}</Label>
+                    <Input
+                      type="file"
+                      accept="image/png,image/*"
+                      onChange={(e) => handleThemeAssetFileChange(asset.key, e.target.files?.[0] || null)}
+                    />
+                    {themeAssetFiles[asset.key] && (
+                      <small style={{ color: '#28a745', display: 'block', marginTop: '5px' }}>
+                        ✓ {themeAssetFiles[asset.key]?.name}
+                      </small>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </FormGroup>
+
+            {/* Symbols */}
+            <FormGroup style={{ gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <Label>Symbols ({formData.configuration.symbols.length})</Label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <SmallButton
+                    onClick={() => setGroupByType(!groupByType)}
+                    style={{ background: groupByType ? '#667eea' : '#eef', color: groupByType ? 'white' : '#333' }}
+                  >
+                    {groupByType ? '📊 Grouped' : '📋 List View'}
+                  </SmallButton>
+                  <SmallButton onClick={addSymbol}>+ Add Symbol</SmallButton>
+                </div>
+              </div>
+
+              <div style={{ background: '#f0f8ff', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '13px', lineHeight: '1.6' }}>
+                <strong>📋 Symbol Types Explained:</strong>
+                <div style={{ marginTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <strong style={{ color: '#333' }}>🎴 Regular:</strong> Standard symbols (cards, fruits, etc.)
+                  </div>
+                  <div>
+                    <strong style={{ color: '#ff9800' }}>🎰 Wild:</strong> Substitutes for any regular symbol
+                  </div>
+                  <div>
+                    <strong style={{ color: '#2196f3' }}>✨ Scatter:</strong> Triggers free spins/bonus rounds
+                  </div>
+                  <div>
+                    <strong style={{ color: '#e91e63' }}>💎 Jackpot:</strong> Triggers jackpot wins
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <strong style={{ color: '#4caf50' }}>⭐ Bonus/Premium:</strong> High-value symbols with special rewards
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: '#fff3cd', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '12px' }}>
+                <strong>💡 Recommended:</strong> Include at least 1 Wild symbol and 1 Scatter symbol for engaging gameplay. Higher weight = more frequent appearance.
+              </div>
+
+              {(() => {
+                const typeCounts = formData.configuration.symbols.reduce((acc, s) => {
+                  acc[s.type] = (acc[s.type] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+                const totalWeight = formData.configuration.symbols.reduce((sum, s) => sum + s.weight, 0);
+
+                return (
+                  <div
+                    style={{
+                      background: '#e8f5e9',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      marginBottom: '15px',
+                      fontSize: '12px',
+                      display: 'flex',
+                      gap: '15px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <strong>Symbol Summary:</strong>
+                    <span>Regular: {typeCounts.regular || 0}</span>
+                    <span style={{ color: '#ff9800', fontWeight: 'bold' }}>Wild: {typeCounts.wild || 0}</span>
+                    <span style={{ color: '#2196f3', fontWeight: 'bold' }}>Scatter: {typeCounts.scatter || 0}</span>
+                    <span style={{ color: '#e91e63', fontWeight: 'bold' }}>Jackpot: {typeCounts.jackpot || 0}</span>
+                    <span>Bonus: {typeCounts.bonus || 0}</span>
+                    <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>Total Weight: {totalWeight}</span>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                if (!groupByType) {
+                  return formData.configuration.symbols.map((symbol, idx) => renderSymbolCard(symbol, idx));
+                }
+
+                const grouped = formData.configuration.symbols.reduce((acc, symbol, idx) => {
+                  if (!acc[symbol.type]) acc[symbol.type] = [];
+                  acc[symbol.type].push({ symbol, idx });
+                  return acc;
+                }, {} as Record<SymbolType, Array<{ symbol: SlotSymbol; idx: number }>>);
+
+                const typeOrder: SymbolType[] = ['regular', 'bonus', 'wild', 'scatter', 'jackpot'];
+                const typeLabels: Record<SymbolType, string> = {
+                  regular: '🎴 Regular Symbols',
+                  wild: '🎰 Wild Symbols',
+                  scatter: '✨ Scatter Symbols',
+                  jackpot: '💎 Jackpot Symbols',
+                  bonus: '⭐ Bonus/Premium Symbols',
+                };
+
+                return typeOrder.map((type) => {
+                  if (!grouped[type]) return null;
+                  return (
+                    <div key={type} style={{ marginBottom: '20px' }}>
+                      <h4
+                        style={{
+                          margin: '15px 0 10px 0',
+                          color: '#333',
+                          borderBottom: '2px solid #e0e0e0',
+                          paddingBottom: '8px',
+                        }}
+                      >
+                        {typeLabels[type]} ({grouped[type].length})
+                      </h4>
+                      {grouped[type].map(({ symbol, idx }) => renderSymbolCard(symbol, idx))}
+                    </div>
+                  );
+                });
+              })()}
+            </FormGroup>
+
+            {/* Paylines */}
+            <FormGroup style={{ gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <Label>Paylines</Label>
+                <SmallButton onClick={addPayline}>+ Add Payline</SmallButton>
+              </div>
+
+              <div
+                style={{ background: '#f0f8ff', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '13px', lineHeight: '1.6' }}
+              >
+                <strong>ℹ️ What are Paylines?</strong>
+                <p style={{ margin: '8px 0 0 0', color: '#555' }}>
+                  Paylines are the patterns where matching symbols must land to win. Each payline connects positions across the reels from left to right.
+                </p>
+                <p style={{ margin: '8px 0 0 0', color: '#555' }}>
+                  <strong>Format:</strong> [[column, row], [column, row], ...]
+                  <br />• <strong>Column</strong> = Reel number (0 to 4 for 5 reels)
+                  <br />• <strong>Row</strong> = Position in reel (0 to 5 for 6 rows)
+                </p>
+                <p style={{ margin: '8px 0 0 0', color: '#555' }}>
+                  <strong>Examples:</strong>
+                  <br />• Top row: <code>[[0,0], [1,0], [2,0], [3,0], [4,0]]</code>
+                  <br />• Middle row: <code>[[0,2], [1,2], [2,2], [3,2], [4,2]]</code>
+                  <br />• V-shape: <code>[[0,0], [1,1], [2,2], [3,1], [4,0]]</code>
+                </p>
+              </div>
+
+              {formData.configuration.paylines.map((payline, idx) => (
+                <div key={payline.id} style={{ border: '1px solid #ddd', padding: '15px', marginBottom: '10px', borderRadius: '8px' }}>
+                  <div style={{ marginBottom: '10px' }}>
+                    <Label>Payline ID: {payline.id}</Label>
+                  </div>
+                  <div>
+                    <Label>Positions (Pattern across the reels)</Label>
+                    <Input
+                      value={JSON.stringify(payline.positions)}
+                      onChange={(e) => {
+                        try {
+                          const parsed = JSON.parse(e.target.value);
+                          updatePayline(idx, parsed);
+                        } catch (_) {
+                          // ignore invalid JSON while typing
+                        }
+                      }}
+                      placeholder="[[0,0], [1,0], [2,0], [3,0], [4,0]]"
+                    />
+                    <small style={{ color: '#666', display: 'block', marginTop: '5px' }}>
+                      Example: [[0,0], [1,0], [2,0], [3,0], [4,0]] = straight line across top row
+                    </small>
+                  </div>
+                  <SmallButton onClick={() => removePayline(idx)} style={{ marginTop: '10px', background: '#ff4444', color: 'white' }}>
+                    Remove Payline
+                  </SmallButton>
+                </div>
+              ))}
+            </FormGroup>
+
+            {/* Bonus Rules */}
+            <FormGroup style={{ gridColumn: '1 / -1' }}>
+              <Label>Bonus Rules</Label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <Label>Free Spins</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.bonusRules.freeSpins}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          bonusRules: {
+                            ...formData.configuration.bonusRules,
+                            freeSpins: parseInt(e.target.value) || 0,
+                          },
+                        },
+                      })
+                    }
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <Label>Multiplier</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.bonusRules.multiplier}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          bonusRules: {
+                            ...formData.configuration.bonusRules,
+                            multiplier: parseFloat(e.target.value) || 1,
+                          },
+                        },
+                      })
+                    }
+                    min="1"
+                    step="0.1"
+                  />
+                </div>
+                <div>
+                  <Label>Scatter Trigger Count</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.bonusRules.scatterTriggerCount}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          bonusRules: {
+                            ...formData.configuration.bonusRules,
+                            scatterTriggerCount: parseInt(e.target.value) || 0,
+                          },
+                        },
+                      })
+                    }
+                    min="1"
+                  />
+                </div>
+              </div>
+            </FormGroup>
+
+            {/* Jackpot Rules */}
+            <FormGroup style={{ gridColumn: '1 / -1' }}>
+              <Label>Jackpot Rules</Label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <Label>Type</Label>
+                  <select
+                    value={formData.configuration.jackpotRules.type}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          jackpotRules: { ...formData.configuration.jackpotRules, type: e.target.value as 'fixed' | 'progressive' },
+                        },
+                      })
+                    }
+                    style={{
+                      padding: '12px',
+                      border: '2px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      width: '100%',
+                    }}
+                  >
+                    <option value="fixed">Fixed</option>
+                    <option value="progressive">Progressive</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Value</Label>
+                  <Input
+                    type="number"
+                    value={formData.configuration.jackpotRules.value}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        configuration: {
+                          ...formData.configuration,
+                          jackpotRules: { ...formData.configuration.jackpotRules, value: parseInt(e.target.value) || 0 },
+                        },
+                      })
+                    }
+                    min="0"
+                  />
+                </div>
+              </div>
+            </FormGroup>
+
+            {/* Betting Limits */}
             <FormGroup>
               <Label>Minimum Bet</Label>
               <Input
                 type="number"
                 value={formData.minBet}
-                onChange={(e) => setFormData({ ...formData, minBet: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, minBet: parseInt(e.target.value) || 0 })}
                 min="1"
               />
             </FormGroup>
@@ -424,26 +930,22 @@ const ThemeCRUD: React.FC = () => {
               <Input
                 type="number"
                 value={formData.maxBet}
-                onChange={(e) => setFormData({ ...formData, maxBet: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ ...formData, maxBet: parseInt(e.target.value) || 0 })}
                 min="1"
               />
             </FormGroup>
 
-            
-
             <FormActions>
-              <SaveButton onClick={handleCreate} disabled={loading}>
+              <SaveButton onClick={handleCreateOrUpdate} disabled={loading}>
                 {loading ? 'Saving...' : 'Save Theme'}
               </SaveButton>
-              <CancelButton onClick={handleCancel} disabled={loading}>
+              <CancelButton onClick={resetForm} disabled={loading}>
                 Cancel
               </CancelButton>
             </FormActions>
           </Form>
         </FormContainer>
       )}
-
-      
 
       <TableContainer>
         {loading && !showForm ? <LoadingSpinner>Loading themes...</LoadingSpinner> : null}
@@ -464,11 +966,11 @@ const ThemeCRUD: React.FC = () => {
               <TableRow key={theme.id}>
                 <TableCell>{theme.name}</TableCell>
                 <TableCell>
-                  <StatusBadge $status={theme.status}>{theme.status}</StatusBadge>
+                  <StatusBadge $status={(theme as any).status || 'DRAFT'}>{(theme as any).status || 'DRAFT'}</StatusBadge>
                 </TableCell>
-                <TableCell>${theme.minBet}</TableCell>
-                <TableCell>${theme.maxBet}</TableCell>
-                <TableCell>v{theme.version}</TableCell>
+                <TableCell>${(theme as any).minBet ?? '-'}</TableCell>
+                <TableCell>${(theme as any).maxBet ?? '-'}</TableCell>
+                <TableCell>v{((theme as any).configuration?.version ?? (theme as any).version ?? 1) as number}</TableCell>
                 <TableCell>
                   <ActionButtons>
                     <ActionButton onClick={() => handleEdit(theme)} title="Edit">
@@ -476,15 +978,11 @@ const ThemeCRUD: React.FC = () => {
                     </ActionButton>
                     <ActionButton
                       onClick={() => handleToggleStatus(theme)}
-                      title={theme.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      title={(theme as any).status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                     >
-                      {theme.status === 'ACTIVE' ? '⏸️' : '▶️'}
+                      {(theme as any).status === 'ACTIVE' ? '⏸️' : '▶️'}
                     </ActionButton>
-                    <ActionButton
-                      onClick={() => handleDelete(theme.id)}
-                      title="Delete"
-                      danger
-                    >
+                    <ActionButton onClick={() => handleDelete(theme.id)} title="Delete" danger>
                       🗑️
                     </ActionButton>
                   </ActionButtons>
@@ -494,15 +992,13 @@ const ThemeCRUD: React.FC = () => {
           </TableBody>
         </Table>
 
-        {themes.length === 0 && !loading && (
-          <EmptyState>No themes found. Create your first theme to get started!</EmptyState>
-        )}
+        {themes.length === 0 && !loading && <EmptyState>No themes found. Create your first theme to get started!</EmptyState>}
       </TableContainer>
     </Container>
   );
 };
 
-/* Styled components (kept from original) */
+/* Styled components */
 const Container = styled.div`
   padding: 30px;
   background: white;
@@ -587,6 +1083,7 @@ const Label = styled.label`
 
 const Input = styled.input`
   padding: 10px;
+  width: 100%;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 1rem;
@@ -598,8 +1095,6 @@ const Input = styled.input`
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   }
 `;
-
-
 
 const FormActions = styled.div`
   grid-column: 1 / -1;
@@ -745,30 +1240,6 @@ const EmptyState = styled.div`
   padding: 60px 20px;
   color: #999;
   font-size: 1.1rem;
-`;
-
-const PlaceholderTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border: 1px solid #e8ecf1;
-  border-radius: 8px;
-  overflow: hidden;
-
-  thead {
-    background: #f1f5f9;
-  }
-
-  th, td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #eef2f7;
-    font-size: 0.9rem;
-  }
-
-  tbody tr:last-child td {
-    border-bottom: none;
-  }
 `;
 
 export default ThemeCRUD;

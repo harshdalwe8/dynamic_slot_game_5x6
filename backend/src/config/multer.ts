@@ -3,6 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
+const sanitizeFilename = (name: string) => name.replace(/[^\w.-]/g, '_');
+const hasUnsafePathSegment = (name: string) => name.includes('..') || name.includes('/') || name.includes('\\');
+
 // Ensure upload directory exists
 const uploadDir = path.join(process.cwd(), 'uploads');
 const themesDir = path.join(uploadDir, 'themes');
@@ -19,7 +22,8 @@ const assetsDir = path.join(uploadDir, 'assets');
 const themeStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const themeId = req.params.id || req.body.themeId || 'temp';
-    const themeUploadDir = path.join(themesDir, themeId);
+    const safeThemeId = sanitizeFilename(themeId);
+    const themeUploadDir = path.join(themesDir, safeThemeId);
     
     // Create theme-specific directory
     if (!fs.existsSync(themeUploadDir)) {
@@ -32,7 +36,7 @@ const themeStorage = multer.diskStorage({
     // Generate unique filename with original extension
     const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext);
+    const basename = sanitizeFilename(path.basename(file.originalname, ext));
     cb(null, `${basename}-${uniqueSuffix}${ext}`);
   },
 });
@@ -45,7 +49,7 @@ const assetStorage = multer.diskStorage({
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext);
+    const basename = sanitizeFilename(path.basename(file.originalname, ext));
     cb(null, `${basename}-${uniqueSuffix}${ext}`);
   },
 });
@@ -55,7 +59,11 @@ const imageFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFil
   const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   
   if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
+    if (hasUnsafePathSegment(file.originalname)) {
+      cb(new Error('Invalid file name'));
+    } else {
+      cb(null, true);
+    }
   } else {
     cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
   }
@@ -64,7 +72,11 @@ const imageFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFil
 // File filter for JSON
 const jsonFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.mimetype === 'application/json' || file.originalname.endsWith('.json')) {
-    cb(null, true);
+    if (hasUnsafePathSegment(file.originalname)) {
+      cb(new Error('Invalid file name'));
+    } else {
+      cb(null, true);
+    }
   } else {
     cb(new Error('Invalid file type. Only JSON files are allowed.'));
   }
@@ -82,7 +94,11 @@ const themeAssetFilter = (req: any, file: Express.Multer.File, cb: multer.FileFi
   ];
   
   if (allowedMimes.includes(file.mimetype) || file.originalname.endsWith('.json')) {
-    cb(null, true);
+    if (hasUnsafePathSegment(file.originalname)) {
+      cb(new Error('Invalid file name'));
+    } else {
+      cb(null, true);
+    }
   } else {
     cb(new Error('Invalid file type. Only images (JPEG, PNG, GIF, WebP) and JSON files are allowed.'));
   }

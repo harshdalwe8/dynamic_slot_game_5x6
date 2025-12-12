@@ -204,6 +204,67 @@ export async function getRTPStatistics(
 }
 
 /**
+ * Get RTP breakdown per theme (aggregated) for CSV/export and dashboards
+ */
+export async function getRTPBreakdown(
+  startDate?: Date,
+  endDate?: Date,
+  themeId?: string
+) {
+  const start = startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const end = endDate || new Date();
+
+  const themeWhere = themeId
+    ? { id: themeId }
+    : { status: 'ACTIVE' as const };
+
+  const themes = await prisma.theme.findMany({
+    where: themeWhere,
+    select: { id: true, name: true, status: true },
+  });
+
+  const breakdown = await Promise.all(
+    themes.map(async (theme) => {
+      const aggregate = await prisma.spin.aggregate({
+        where: {
+          themeId: theme.id,
+          createdAt: {
+            gte: start,
+            lte: end,
+          },
+        },
+        _sum: {
+          betAmount: true,
+          winAmount: true,
+        },
+        _count: true,
+      });
+
+      const totalSpins = aggregate._count;
+      const totalBet = Number(aggregate._sum.betAmount || 0);
+      const totalWin = Number(aggregate._sum.winAmount || 0);
+      const rtp = totalBet > 0 ? (totalWin / totalBet) * 100 : 0;
+
+      return {
+        themeId: theme.id,
+        themeName: theme.name,
+        status: theme.status,
+        totalSpins,
+        totalBet,
+        totalWin,
+        rtp,
+        period: {
+          start,
+          end,
+        },
+      };
+    })
+  );
+
+  return breakdown;
+}
+
+/**
  * Generate daily RTP snapshots for all active themes (cron job)
  */
 export async function generateDailyRTPSnapshots() {

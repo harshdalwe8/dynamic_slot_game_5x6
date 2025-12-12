@@ -4,6 +4,7 @@ import prisma from '../config/db';
 import { executeSpin, replaySpin, ThemeConfig } from '../services/slotEngine';
 import { executeSpinTransaction, getBalance } from '../services/walletService';
 import { checkAndUnlockAchievements } from '../services/achievementService';
+import { getSocketService } from '../services/socketServiceInstance';
 
 /**
  * POST /api/spin - Execute a slot machine spin
@@ -99,6 +100,25 @@ export const spin = async (req: AuthRequest, res: Response) => {
 
     // Check and unlock achievements after spin
     const unlockedAchievements = await checkAndUnlockAchievements(userId);
+
+    // Emit realtime events to client
+    const socketService = getSocketService();
+    if (socketService) {
+      socketService.emitSpinResult(userId, {
+        ...spinResult,
+        spinId: spinLog.id,
+      });
+      socketService.emitBalanceUpdate(userId, newBalance, {
+        betAmount,
+        winAmount: spinResult.winAmount,
+        spinId: spinLog.id,
+      });
+      if (unlockedAchievements.length > 0) {
+        unlockedAchievements.forEach((achievement) =>
+          socketService.emitAchievementUnlocked(userId, achievement)
+        );
+      }
+    }
 
     // Return result to client
     res.json({

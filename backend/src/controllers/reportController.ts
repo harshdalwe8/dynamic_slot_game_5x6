@@ -7,6 +7,7 @@ import {
   getCurrentRTPForAllThemes,
   getRTPStatistics,
   getThemeRTPHistory,
+  getRTPBreakdown,
 } from '../services/rtpService';
 
 /**
@@ -49,7 +50,9 @@ export const getRTPReport = async (req: AuthRequest, res: Response) => {
       end
     );
 
-    res.json({ report: statistics });
+    const breakdown = await getRTPBreakdown(start, end, themeId as string | undefined);
+
+    res.json({ report: { ...statistics, breakdown } });
   } catch (error: any) {
     console.error('Get RTP report error:', error);
     res.status(500).json({ error: 'Failed to get RTP report' });

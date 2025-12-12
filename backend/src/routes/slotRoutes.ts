@@ -6,6 +6,7 @@ import {
   getActiveThemes,
   getWallet,
 } from '../controllers/slotController';
+import { getThemeDetails } from '../controllers/adminController';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { spinLimiter } from '../middleware/rateLimiter';
 
@@ -15,6 +16,7 @@ const router = Router();
 router.post('/spin', authenticate, spinLimiter, spin);
 router.get('/spin/history', authenticate, getSpinHistory);
 router.get('/themes', authenticate, getActiveThemes);
+router.get('/themes/:themeId', authenticate, getThemeDetails);
 router.get('/wallet', authenticate, getWallet);
 
 // Admin routes

@@ -119,6 +119,11 @@ export const getActiveThemes = async (): Promise<{ themes: Theme[] }> => {
   return response.data;
 };
 
+export const getThemeDetails = async (themeId: string): Promise<{ theme: Theme }> => {
+  const response = await playerApi.get(`/themes/${themeId}`);
+  return response.data;
+};
+
 // ============= WALLET =============
 
 export interface Wallet {

@@ -14,10 +14,12 @@ import reportRoutes from './routes/reportRoutes';
 import exportRoutes from './routes/exportRoutes';
 import gamificationRoutes from './routes/gamificationRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import demoRoutes from './routes/demoRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { globalLimiter } from './middleware/rateLimiter';
 import { getMetrics } from './utils/metrics';
 import SocketService from './services/socketService';
+import { setSocketService } from './services/socketServiceInstance';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +54,7 @@ app.get('/metrics', getMetrics);
 
 // Serve static uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/theme', express.static(path.join(process.cwd(), 'public', 'theme')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -61,12 +64,14 @@ app.use('/api/admin/reports', reportRoutes);
 app.use('/api/admin/export', exportRoutes);
 app.use('/api/admin/upload', uploadRoutes);
 app.use('/api/gamification', gamificationRoutes);
+app.use('/api/demo', demoRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);
 
 // Initialize Socket.IO service
 const socketService = new SocketService(io);
+setSocketService(socketService);
 
 // Export io and socketService for use in other modules
 export { io, socketService };

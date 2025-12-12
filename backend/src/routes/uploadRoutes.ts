@@ -22,6 +22,13 @@ router.use(requireAdmin);
  */
 router.post('/theme-assets/:themeId', uploadThemeAssets.array('assets', 20), uploadThemeAssetsEndpoint);
 
+/**
+ * POST /api/admin/upload/theme-symbols/:themeId
+ * Upload theme symbol images
+ * Accepts: multipart/form-data with field name "symbols"
+ */
+router.post('/theme-symbols/:themeId', uploadThemeAssets.array('symbols', 50), uploadThemeAssetsEndpoint);
+
 // (theme-json endpoint removed)
 
 /**

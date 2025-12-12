@@ -59,11 +59,32 @@ import { validateThemeJson, validateAssetManifest } from '../utils/themeValidato
  */
 export const createTheme = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, jsonSchema, assetManifest } = req.body;
+    const { name, jsonSchema, configuration, themeId, assetManifest, minBet, maxBet } = req.body;
     const createdBy = req.user!.id;
 
+    // Use configuration or jsonSchema (configuration takes precedence)
+    const baseSchema = configuration || jsonSchema;
+    if (!baseSchema) {
+      return res.status(400).json({ error: 'configuration or jsonSchema is required' });
+    }
+
+    // Extract or use provided themeId
+    const finalThemeId = themeId || baseSchema.themeId;
+    if (!finalThemeId) {
+      return res.status(400).json({ error: 'themeId is required' });
+    }
+
+    // Add minBet, maxBet, and name to jsonSchema if provided
+    const enhancedJsonSchema = {
+      ...baseSchema,
+      themeId: finalThemeId,
+      name: name || baseSchema.name,
+      ...(minBet !== undefined && { minBet }),
+      ...(maxBet !== undefined && { maxBet }),
+    };
+
     // Validate theme JSON
-    const jsonValidation = validateThemeJson(jsonSchema);
+    const jsonValidation = validateThemeJson(enhancedJsonSchema);
     if (!jsonValidation.valid) {
       return res.status(400).json({
         error: 'Invalid theme JSON',
@@ -71,24 +92,28 @@ export const createTheme = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Validate asset manifest
-    const assetValidation = validateAssetManifest(assetManifest);
-    if (!assetValidation.valid) {
-      return res.status(400).json({
-        error: 'Invalid asset manifest',
-        details: assetValidation.errors,
-      });
+    // Validate asset manifest if provided
+    if (assetManifest) {
+      const assetValidation = validateAssetManifest(assetManifest);
+      if (!assetValidation.valid) {
+        return res.status(400).json({
+          error: 'Invalid asset manifest',
+          details: assetValidation.errors,
+        });
+      }
     }
 
     // Create theme in draft status
     const theme = await prisma.theme.create({
       data: {
-        id: jsonSchema.themeId,
+        id: finalThemeId,
         name,
         version: 1,
         status: 'DRAFT',
-        jsonSchema,
-        assetManifest,
+        jsonSchema: enhancedJsonSchema,
+        assetManifest: assetManifest || {},
+        minBet: minBet !== undefined ? minBet : 10,
+        maxBet: maxBet !== undefined ? maxBet : 1000,
         createdBy,
       },
     });
@@ -98,8 +123,8 @@ export const createTheme = async (req: AuthRequest, res: Response) => {
       data: {
         themeId: theme.id,
         version: 1,
-        json: jsonSchema,
-        assets: assetManifest,
+        json: enhancedJsonSchema,
+        assets: assetManifest || {},
         notes: 'Initial version',
       },
     });
@@ -129,7 +154,7 @@ export const createTheme = async (req: AuthRequest, res: Response) => {
 export const updateTheme = async (req: AuthRequest, res: Response) => {
   try {
     const { themeId } = req.params;
-    const { name, jsonSchema, assetManifest, notes } = req.body;
+    const { name, configuration, jsonSchema, assetManifest, notes, minBet, maxBet } = req.body;
     const adminId = req.user!.id;
 
     // Get existing theme
@@ -141,9 +166,19 @@ export const updateTheme = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Theme not found' });
     }
 
+    // Use configuration or jsonSchema (configuration takes precedence)
+    const updatedJsonSchema = configuration || jsonSchema;
+    
+    // Merge minBet/maxBet if provided
+    const enhancedJsonSchema = updatedJsonSchema ? {
+      ...updatedJsonSchema,
+      ...(minBet !== undefined && { minBet }),
+      ...(maxBet !== undefined && { maxBet }),
+    } : null;
+
     // Validate if provided
-    if (jsonSchema) {
-      const validation = validateThemeJson(jsonSchema);
+    if (enhancedJsonSchema) {
+      const validation = validateThemeJson(enhancedJsonSchema);
       if (!validation.valid) {
         return res.status(400).json({
           error: 'Invalid theme JSON',
@@ -171,8 +206,10 @@ export const updateTheme = async (req: AuthRequest, res: Response) => {
       data: {
         name: name || existingTheme.name,
         version: newVersion,
-        jsonSchema: jsonSchema || existingTheme.jsonSchema,
+        jsonSchema: enhancedJsonSchema || existingTheme.jsonSchema,
         assetManifest: assetManifest || existingTheme.assetManifest,
+        minBet: minBet !== undefined ? minBet : existingTheme.minBet,
+        maxBet: maxBet !== undefined ? maxBet : existingTheme.maxBet,
         status: 'DRAFT', // Reset to draft on update
       },
     });
@@ -182,7 +219,7 @@ export const updateTheme = async (req: AuthRequest, res: Response) => {
       data: {
         themeId,
         version: newVersion,
-        json: jsonSchema || existingTheme.jsonSchema,
+        json: enhancedJsonSchema || existingTheme.jsonSchema,
         assets: assetManifest || existingTheme.assetManifest,
         notes: notes || `Version ${newVersion}`,
       },
@@ -355,12 +392,21 @@ export const getAllThemes = async (req: AuthRequest, res: Response) => {
         name: true,
         version: true,
         status: true,
+        jsonSchema: true,
+        minBet: true,
+        maxBet: true,
         createdAt: true,
         createdBy: true,
       },
     });
 
-    res.json({ themes });
+    // Map to include configuration
+    const themesWithConfig = themes.map(theme => ({
+      ...theme,
+      configuration: theme.jsonSchema,
+    }));
+
+    res.json({ themes: themesWithConfig });
   } catch (error: any) {
     console.error('Get all themes error:', error);
     res.status(500).json({ error: 'Failed to get themes' });

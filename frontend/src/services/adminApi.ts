@@ -63,17 +63,44 @@ export interface Theme {
 
 export interface CreateThemeRequest {
   name: string;
-  jsonSchema: any;
-  assetManifest: any;
-}
-
-export interface UpdateThemeRequest {
-  name?: string;
-  configuration?: any;
+  themeId?: string;
+  configuration: any;
   minBet?: number;
   maxBet?: number;
-  notes?: string;
+  assetManifest?: Record<string, string>; // optional metadata
 }
+
+export interface UpdateThemeRequest extends CreateThemeRequest {}
+
+// Upload theme UI assets (Balance, BKG, buttons, reels, etc.)
+export const uploadThemeAssets = async (
+  themeId: string,
+  assets: Record<string, File | null>
+) => {
+  const formData = new FormData();
+  Object.entries(assets).forEach(([key, file]) => {
+    if (file) formData.append('assets', file, `${key}.png`);
+  });
+
+  return adminApi.post(`/admin/upload/theme-assets/${themeId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+// Upload theme symbols with filenames derived from SymbolID
+export const uploadThemeSymbols = async (
+  themeId: string,
+  symbols: Record<string, File | null>
+) => {
+  const formData = new FormData();
+  Object.entries(symbols).forEach(([symbolId, file]) => {
+    if (file) formData.append('symbols', file, `${symbolId}.png`);
+  });
+
+  return adminApi.post(`/admin/upload/theme-symbols/${themeId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 
 export const getAllThemes = async (status?: 'DRAFT' | 'ACTIVE' | 'DISABLED') => {
   const params = status ? { status } : {};
@@ -117,18 +144,6 @@ export const deleteTheme = async (themeId: string) => {
 };
 
 // ============= FILE UPLOAD =============
-
-export const uploadThemeAssets = async (themeId: string, files: File[]) => {
-  const formData = new FormData();
-  files.forEach((file) => {
-    formData.append('assets', file);
-  });
-  const response = await adminApi.post(`/admin/upload/theme-assets/${themeId}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return response.data;
-};
-
 
 export const uploadImage = async (file: File) => {
   const formData = new FormData();
