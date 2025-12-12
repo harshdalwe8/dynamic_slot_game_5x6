@@ -429,6 +429,14 @@ export const getThemeDetails = async (req: AuthRequest, res: Response) => {
         versions: {
           orderBy: { version: 'desc' },
           take: 10,
+          select: {
+            id: true,
+            themeId: true,
+            version: true,
+            createdAt: true,
+            notes: true,
+            // Exclude the large 'json' and 'assets' fields to reduce response size
+          },
         },
       },
     });

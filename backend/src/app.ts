@@ -37,7 +37,9 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Security headers with CORS support for images
 app.use(cors());
 app.use(morgan('dev')); // Logging
 app.use(express.json());
@@ -54,9 +56,18 @@ app.get('/health', (req, res) => {
 // Metrics endpoint for Prometheus
 app.get('/metrics', getMetrics);
 
-// Serve static uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/theme', express.static(path.join(process.cwd(), 'public', 'theme')));
+// Serve static uploaded files with CORS headers
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(process.cwd(), 'uploads')));
+
+app.use('/theme', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(process.cwd(), 'public', 'theme')));
 
 // API Routes
 app.use('/api/auth', authRoutes);

@@ -161,8 +161,12 @@ export function validateThemeJson(themeJson: any): {
   // Additional business logic validation for strict format
   if (Array.isArray(themeJson.symbols)) {
     for (const symbol of themeJson.symbols) {
-      if (symbol.asset && (symbol.asset.includes('..') || symbol.asset.includes('/') || symbol.asset.includes('\\'))) {
-        errors.push(`Symbol ${symbol.id}: Invalid asset filename`);
+      if (symbol.asset) {
+        const hasTraversal = symbol.asset.includes('..');
+        const hasBackslash = symbol.asset.includes('\\');
+        if (hasTraversal || hasBackslash) {
+          errors.push(`Symbol ${symbol.id}: Invalid asset path`);
+        }
       }
     }
   }

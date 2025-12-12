@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { spinSlot, getWalletBalance, getActiveThemes, Theme } from '../services/playerApi';
+import { spinSlot, getWalletBalance, getActiveThemes, getThemeDetails, Theme } from '../services/playerApi';
 import { useLocation, useHistory } from 'react-router-dom';
 import styled, { keyframes, css } from 'styled-components';
 
@@ -23,9 +23,9 @@ const pulse = keyframes`
 // ============= STYLED COMPONENTS =============
 const GameWrapper = styled.div`
   /* Ensure the game occupies the full viewport and prevents body scrolling */
-  width: 80%;
-  height: 85vh;
-  max-width: 80vw;
+  width: 95%;
+  height: 90vh;
+  max-width: 1200px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -34,11 +34,11 @@ const GameWrapper = styled.div`
   position: relative;
   background-color: #0a0a2a;
   background-image: radial-gradient(circle at 50% 50%, #2b2b60 0%, #050510 100%);
-  overflow: hidden; /* prevent page scroll */
+  overflow: auto; /* allow scroll if needed */
   box-sizing: border-box;
   font-family: 'Roboto', 'Titan One', sans-serif;
-  --header-h: 67px; /* approximate header height */
-  --footer-h: 88px; /* approximate footer height */
+  --header-h: 60px; /* approximate header height */
+  --footer-h: 80px; /* approximate footer height */
 `;
 
 const Header = styled.div`
@@ -154,15 +154,15 @@ const MainPlayArea = styled.div`
   flex: 1 1 auto;
   gap: 10px;
   /* Fit the available space between header and footer */
-  max-height: calc(100vh - var(--header-h) - var(--footer-h) - 24px);
-  height: calc(100vh - var(--header-h) - var(--footer-h) - 24px);
+  max-height: 500px;
+  height: auto;
 
   @media (max-width: 480px) {
-    max-height: calc(100vh - var(--header-h) - var(--footer-h) - 12px);
+    max-height: 400px;
   }
 
-  @media (max-height: 500px) {
-    max-height: calc(100vh - var(--header-h) - 60px);
+  @media (max-height: 700px) {
+    max-height: 350px;
   }
 `;
 
@@ -204,19 +204,19 @@ const SlotGridFrame = styled.div`
   background: rgba(0, 0, 0, 0.3);
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
   width: 100%;
-  max-width: min(720px, 92vw);
+  max-width: min(600px, 85vw);
   display: flex;
   align-items: center;
   justify-content: center;
   /* ensure grid never exceeds the available height */
-  max-height: calc(100vh - var(--header-h) - var(--footer-h) - 40px);
+  max-height: 480px;
   height: 100%;
   box-sizing: border-box;
 `;
 
-const SlotGrid = styled.div`
+const SlotGrid = styled.div<{ $cols: number }>`
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(${(props) => props.$cols || 5}, 1fr);
   gap: 4px;
   background-color: #000;
   padding: 4px;
@@ -258,6 +258,14 @@ const Symbol = styled.div<{ $winning?: boolean; $spinning?: boolean }>`
       animation: ${pop} 0.4s ease-in-out infinite alternate;
       transform-origin: center;
     `}
+`;
+
+const SymbolImage = styled.img`
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 `;
 
 const Footer = styled.div`
@@ -464,6 +472,17 @@ const ErrorMessage = styled.div`
   font-weight: bold;
 `;
 
+const LoadingNotice = styled.div`
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffff00;
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border: 2px dashed #ffd700;
+  text-align: center;
+  font-weight: bold;
+`;
+
 const WinMessage = styled.div`
   background: linear-gradient(to bottom, #00cc00, #006600);
   color: #ffff00;
@@ -485,6 +504,7 @@ const SlotMachine: React.FC = () => {
   
   const [themes, setThemes] = useState<Theme[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [themeDetails, setThemeDetails] = useState<Theme | null>(null);
   const [grid, setGrid] = useState<string[][]>([]);
   const [balance, setBalance] = useState<number>(10000);
   const [betAmount, setBetAmount] = useState<number>(100);
@@ -493,26 +513,90 @@ const SlotMachine: React.FC = () => {
   const [winningPositions, setWinningPositions] = useState<Set<string>>(new Set());
   const [showWinMessage, setShowWinMessage] = useState(false);
   const [error, setError] = useState<string>('');
+  const [isLoadingTheme, setIsLoadingTheme] = useState(false);
+  const [isLoadingWallet, setIsLoadingWallet] = useState(false);
 
   const defaultSymbols = useMemo(
     () => ['💎', '7️⃣', '🍒', '🔔', '⭐', '🍋', '👑', '♠️', '♥️', '♣️', '♦️'],
     []
   );
 
+  const rows = useMemo(() => themeDetails?.jsonSchema?.grid?.rows || 6, [themeDetails]);
+  const cols = useMemo(() => themeDetails?.jsonSchema?.grid?.columns || 5, [themeDetails]);
+
+  const symbolSet = useMemo(() => {
+    if (themeDetails?.jsonSchema?.symbols?.length) {
+      return themeDetails.jsonSchema.symbols.map((s: any) => s.id || s.name || '♦');
+    }
+    return defaultSymbols;
+  }, [themeDetails, defaultSymbols]);
+
+  // Map symbol ID to image URL
+  const symbolImageMap = useMemo(() => {
+    const map: { [key: string]: string } = {};
+    if (themeDetails?.jsonSchema?.symbols) {
+      themeDetails.jsonSchema.symbols.forEach((symbol: any) => {
+        if (symbol.asset) {
+          // Convert "public/theme/themenewfolder/symbols/k.png" to "http://localhost:5000/theme/themenewfolder/symbols/k.png"
+          const assetPath = symbol.asset.replace(/^public\//, '');
+          map[symbol.id] = `${process.env.REACT_APP_FILE_URL || 'http://localhost:5000'}/${assetPath}`;
+        }
+      });
+    }
+    return map;
+  }, [themeDetails]);
+
+  const getSymbolDisplay = (symbolId: string) => {
+    const imageUrl = symbolImageMap[symbolId];
+    if (imageUrl) {
+      return <SymbolImage src={imageUrl} alt={symbolId} />;
+    }
+    return symbolId; // Fallback to text if no image
+  };
+
   const initializeGrid = useCallback(() => {
     const emptyGrid: string[][] = [];
-    for (let row = 0; row < 6; row++) {
+    for (let row = 0; row < rows; row++) {
       const rowData: string[] = [];
-      for (let col = 0; col < 5; col++) {
-        rowData.push(defaultSymbols[Math.floor(Math.random() * defaultSymbols.length)]);
+      for (let col = 0; col < cols; col++) {
+        rowData.push(symbolSet[Math.floor(Math.random() * symbolSet.length)]);
       }
       emptyGrid.push(rowData);
     }
     setGrid(emptyGrid);
-  }, [defaultSymbols]);
+  }, [rows, cols, symbolSet]);
+
+  const fetchThemeData = useCallback(async (themeId: string) => {
+    try {
+      setIsLoadingTheme(true);
+      setIsLoadingWallet(true);
+      const [themeResponse, walletResponse] = await Promise.all([
+        getThemeDetails(themeId),
+        getWalletBalance(),
+      ]);
+
+      if (themeResponse?.theme) {
+        setSelectedTheme(themeResponse.theme);
+        setThemeDetails(themeResponse.theme);
+      }
+
+      // Handle both response formats: { balance } or { wallet: { balance } }
+      const walletBalance = walletResponse?.wallet?.balance ?? walletResponse?.balance ?? 10000;
+      setBalance(walletBalance);
+    } catch (err: any) {
+      console.error('Failed to load theme details or wallet:', err);
+      setError(err.response?.data?.message || 'Failed to load theme or wallet');
+      // Set a default balance if wallet fetch fails
+      setBalance(10000);
+    } finally {
+      setIsLoadingTheme(false);
+      setIsLoadingWallet(false);
+    }
+  }, []);
 
   const loadThemes = useCallback(async () => {
     try {
+      setError('');
       const data = await getActiveThemes();
       if (data.themes && data.themes.length > 0) {
         setThemes(data.themes);
@@ -526,6 +610,7 @@ const SlotMachine: React.FC = () => {
           const selectedThemeFromUrl = data.themes.find(t => t.id === themeId);
           if (selectedThemeFromUrl) {
             setSelectedTheme(selectedThemeFromUrl);
+            fetchThemeData(selectedThemeFromUrl.id);
           } else {
             // Theme not found, redirect back to theme selection
             console.warn(`Theme with ID ${themeId} not found, redirecting to theme selection`);
@@ -534,27 +619,24 @@ const SlotMachine: React.FC = () => {
         } else {
           // No themeId in URL, use first theme as fallback
           setSelectedTheme(data.themes[0]);
+          fetchThemeData(data.themes[0].id);
         }
+      } else {
+        setError('No active themes available');
       }
     } catch (err) {
       console.error('Failed to load themes:', err);
+      setError('Failed to load themes');
     }
-  }, [location.search, history]);
-
-  const fetchBalance = useCallback(async () => {
-    try {
-      const response = await getWalletBalance();
-      setBalance(response.balance || 10000); 
-    } catch (err) {
-      console.error('Failed to fetch balance:', err);
-    }
-  }, []);
+  }, [location.search, history, fetchThemeData]);
 
   useEffect(() => {
     initializeGrid();
-    fetchBalance();
+  }, [initializeGrid]);
+
+  useEffect(() => {
     loadThemes();
-  }, [initializeGrid, fetchBalance, loadThemes]);
+  }, [loadThemes]);
 
   const handleSpin = async () => {
     if (isSpinning) return;
@@ -582,17 +664,17 @@ const SlotMachine: React.FC = () => {
       }
 
       // Simulate spinning with staggered delays
-      const spinResults: string[][] = [[], [], [], [], []];
-      const spinPromises = [];
+      const spinResults: string[][] = Array.from({ length: cols }, () => []);
+      const spinPromises: Promise<void>[] = [];
 
-      for (let col = 0; col < 5; col++) {
+      for (let col = 0; col < cols; col++) {
         spinPromises.push(
           new Promise<void>((resolve) => {
             setTimeout(() => {
-              const colSymbols = [];
-              for (let row = 0; row < 6; row++) {
+              const colSymbols: string[] = [];
+              for (let row = 0; row < rows; row++) {
                 colSymbols.push(
-                  defaultSymbols[Math.floor(Math.random() * defaultSymbols.length)]
+                  symbolSet[Math.floor(Math.random() * symbolSet.length)]
                 );
               }
               spinResults[col] = colSymbols;
@@ -606,9 +688,9 @@ const SlotMachine: React.FC = () => {
 
       // Transpose to row-major format
       const result: string[][] = [];
-      for (let row = 0; row < 6; row++) {
+      for (let row = 0; row < rows; row++) {
         const rowData: string[] = [];
-        for (let col = 0; col < 5; col++) {
+        for (let col = 0; col < cols; col++) {
           rowData.push(spinResults[col][row]);
         }
         result.push(rowData);
@@ -679,6 +761,10 @@ const SlotMachine: React.FC = () => {
       </Header>
 
       {/* Error Message */}
+      {(isLoadingTheme || isLoadingWallet) && (
+        <LoadingNotice>Loading theme and wallet...</LoadingNotice>
+      )}
+
       {error && <ErrorMessage>{error}</ErrorMessage>}
 
       {/* Win Message */}
@@ -695,7 +781,7 @@ const SlotMachine: React.FC = () => {
         </SideChips>
 
         <SlotGridFrame>
-          <SlotGrid>
+          <SlotGrid $cols={cols}>
             {grid.map((row, rowIdx) =>
               row.map((symbol, colIdx) => (
                 <Symbol
@@ -703,7 +789,7 @@ const SlotMachine: React.FC = () => {
                   $spinning={isSpinning}
                   $winning={winningPositions.has(`${rowIdx}-${colIdx}`)}
                 >
-                  {symbol}
+                  {getSymbolDisplay(symbol)}
                 </Symbol>
               ))
             )}
@@ -737,7 +823,7 @@ const SlotMachine: React.FC = () => {
         </FooterLeft>
 
         <SpinContainer>
-          <SpinBtn onClick={handleSpin} disabled={isSpinning}>
+          <SpinBtn onClick={handleSpin} disabled={isSpinning || isLoadingTheme || isLoadingWallet}>
             SPIN
           </SpinBtn>
         </SpinContainer>

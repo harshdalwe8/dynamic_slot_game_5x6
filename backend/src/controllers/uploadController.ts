@@ -62,6 +62,23 @@ export const uploadThemeAssetsEndpoint = async (req: AuthRequest, res: Response)
           url: `/theme/${themeName}/assets/${newFilename}`,
         });
       }
+
+      // Update theme's assetManifest in database
+      const currentAssetManifest = (theme.assetManifest as any) || {};
+      const updatedAssetManifest = { ...currentAssetManifest };
+
+      movedFiles.forEach((file) => {
+        updatedAssetManifest[file.key] = {
+          filename: file.filename,
+          path: file.path,
+          url: file.url,
+        };
+      });
+
+      await prisma.theme.update({
+        where: { id: themeId },
+        data: { assetManifest: updatedAssetManifest },
+      });
     } catch (err: any) {
       deleteUploadedFiles(files);
       movedFiles.forEach((file) => {

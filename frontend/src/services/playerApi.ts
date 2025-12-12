@@ -99,16 +99,25 @@ export const getSpinHistory = async (
 export interface Theme {
   id: string;
   name: string;
-  configuration: {
+  jsonSchema: {
+    grid: {
+      rows: number;
+      columns: number;
+    };
     symbols: Array<{
       id: string;
-      value: string;
+      name: string;
+      type?: string;
+      asset: string;
       weight: number;
-      payout: { [key: string]: number };
+      paytable: number[];
     }>;
-    reels: number;
-    rows: number;
-    paylines: number[][];
+    paylines: Array<{
+      id: number | string;
+      positions: number[][];
+    }>;
+    bonusRules?: any;
+    jackpotRules?: any;
   };
   minBet: number;
   maxBet: number;
