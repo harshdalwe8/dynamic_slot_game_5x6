@@ -135,13 +135,22 @@ export const getThemeDetails = async (themeId: string): Promise<{ theme: Theme }
 
 // ============= WALLET =============
 
-export interface Wallet {
+export interface WalletData {
   balance: number;
   currency: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
-export const getWalletBalance = async (): Promise<Wallet> => {
+export interface Wallet extends WalletData {}
+
+export interface WalletResponse {
+  wallet?: WalletData;
+  balance?: number;
+  currency?: string;
+  updatedAt?: string;
+}
+
+export const getWalletBalance = async (): Promise<WalletResponse> => {
   const response = await playerApi.get('/wallet');
   return response.data;
 };

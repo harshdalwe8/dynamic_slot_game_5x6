@@ -21,7 +21,7 @@ router.use(requireAdmin);
  * Upload multiple assets (images, JSON) for a theme
  * Accepts: multipart/form-data with field name "assets"
  */
-router.post('/theme-assets/:themeId', uploadThemeAssets.array('assets', 20), uploadThemeAssetsEndpoint);
+router.post('/theme-assets/:themeId', uploadThemeAssets.array('assets', 50), uploadThemeAssetsEndpoint);
 
 /**
  * POST /api/admin/upload/theme-symbols/:themeId

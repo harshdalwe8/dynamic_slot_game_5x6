@@ -403,13 +403,7 @@ export const getAllThemes = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Map to include configuration
-    const themesWithConfig = themes.map(theme => ({
-      ...theme,
-      configuration: theme.jsonSchema,
-    }));
-
-    res.json({ themes: themesWithConfig });
+    res.json({ themes });
   } catch (error: any) {
     console.error('Get all themes error:', error);
     res.status(500).json({ error: 'Failed to get themes' });

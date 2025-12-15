@@ -171,6 +171,7 @@ const ThemeCRUD: React.FC = () => {
   const [themeAssetFiles, setThemeAssetFiles] = useState<Record<string, File | null>>(
     () => Object.fromEntries(defaultThemeAssets.map((a) => [a.key, null])) as Record<string, File | null>
   );
+  const [existingAssets, setExistingAssets] = useState<Record<string, { filename: string; path: string; url: string }>>({});
   const [formData, setFormData] = useState<FormData>({
     name: '',
     themeId: '',
@@ -207,6 +208,7 @@ const ThemeCRUD: React.FC = () => {
     setEditingId(null);
     setSymbolFiles(new Map());
     setThemeAssetFiles(Object.fromEntries(defaultThemeAssets.map((a) => [a.key, null])) as Record<string, File | null>);
+    setExistingAssets({});
     setShowForm(false);
   };
 
@@ -343,7 +345,8 @@ const ThemeCRUD: React.FC = () => {
       if (selectedAssets.length > 0) {
         console.log(`Uploading ${selectedAssets.length} theme asset(s)...`);
         try {
-          await uploadThemeAssets(themeId, themeAssetFiles);
+          const selectedAssetsObject = Object.fromEntries(selectedAssets);
+          await uploadThemeAssets(themeId, selectedAssetsObject);
           console.log('Theme assets uploaded successfully');
         } catch (assetErr: any) {
           console.warn('Theme asset upload warning:', assetErr.message);
@@ -362,7 +365,7 @@ const ThemeCRUD: React.FC = () => {
   };
 
   const handleEdit = (theme: Theme) => {
-    const configFromTheme = ensureConfiguration((theme as any).configuration);
+    const configFromTheme = ensureConfiguration((theme as any).configuration || (theme as any).jsonSchema);
     setFormData({
       id: theme.id,
       name: theme.name,
@@ -375,6 +378,10 @@ const ThemeCRUD: React.FC = () => {
     setShowForm(true);
     setGroupByType(false);
     setSymbolFiles(new Map());
+    
+    // Load existing assets from theme
+    const assetManifest = (theme as any).assetManifest || {};
+    setExistingAssets(assetManifest);
   };
 
   const handleDelete = async (id: string) => {
@@ -679,6 +686,13 @@ const ThemeCRUD: React.FC = () => {
                     {themeAssetFiles[asset.key] && (
                       <small style={{ color: '#28a745', display: 'block', marginTop: '5px' }}>
                         ✓ {themeAssetFiles[asset.key]?.name}
+                      </small>
+                    )}
+                    {!themeAssetFiles[asset.key] && existingAssets[asset.key] && (
+                      <small style={{ color: '#28a745', display: 'block', marginTop: '5px' }}>
+                        ✅ Existing: {existingAssets[asset.key].filename}
+                        <br />
+                        <span style={{ fontSize: '0.85em', color: '#666' }}>{existingAssets[asset.key].path}</span>
                       </small>
                     )}
                   </div>
@@ -1052,7 +1066,9 @@ const ThemeCRUD: React.FC = () => {
                 </TableCell>
                 <TableCell>${(theme as any).minBet ?? '-'}</TableCell>
                 <TableCell>${(theme as any).maxBet ?? '-'}</TableCell>
-                <TableCell>v{((theme as any).configuration?.version ?? (theme as any).version ?? 1) as number}</TableCell>
+                <TableCell>
+                  v{((theme as any).configuration?.version ?? (theme as any).jsonSchema?.version ?? (theme as any).version ?? 1) as number}
+                </TableCell>
                 <TableCell>
                   <ActionButtons>
                     <ActionButton onClick={() => handleEdit(theme)} title="Edit">

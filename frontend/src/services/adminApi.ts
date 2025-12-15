@@ -54,11 +54,13 @@ export interface Theme {
   name: string;
   status: 'DRAFT' | 'ACTIVE' | 'DISABLED';
   version: number;
-  configuration: any;
+  jsonSchema?: any;
+  configuration?: any;
   minBet: number;
   maxBet: number;
   createdAt: string;
   updatedAt: string;
+  assetManifest?: Record<string, any>;
 }
 
 export interface CreateThemeRequest {
