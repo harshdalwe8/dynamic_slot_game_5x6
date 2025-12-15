@@ -55,6 +55,7 @@ test-results/
 
 # Uploads and assets
 uploads/
+backend/public/
 *.tmp
 temp/
 
