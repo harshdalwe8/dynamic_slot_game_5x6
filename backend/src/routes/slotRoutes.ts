@@ -5,6 +5,7 @@ import {
   auditSpin,
   getActiveThemes,
   getWallet,
+  getTransactionHistory,
 } from '../controllers/slotController';
 import { getThemeDetails } from '../controllers/adminController';
 import { authenticate, requireAdmin } from '../middleware/auth';
@@ -18,6 +19,7 @@ router.get('/spin/history', authenticate, getSpinHistory);
 router.get('/themes', authenticate, getActiveThemes);
 router.get('/themes/:themeId', authenticate, getThemeDetails);
 router.get('/wallet', authenticate, getWallet);
+router.get('/wallet/transactions', authenticate, getTransactionHistory);
 
 // Admin routes
 router.get('/spin/audit/:spinId', authenticate, requireAdmin, auditSpin);

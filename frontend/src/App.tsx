@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom';
 import SlotMachine from './components/SlotMachine';
 import Login from './components/Login';
@@ -6,9 +6,13 @@ import Register from './components/Register';
 import AdminLogin from './components/AdminLogin';
 import AdminPanel from './components/AdminPanel';
 import ThemeSelection from './components/ThemeSelection';
+import ReferPage from './components/ReferPage';
+import WalletPage from './components/WalletPage';
+import DepositPage from './components/DepositPage';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import styled from 'styled-components';
+import { regenerateReferralCode as regenerateReferralCodeApi } from './services/authApi';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ component: React.ComponentType<any>; path: string; exact?: boolean }> = ({
@@ -94,6 +98,9 @@ const App: React.FC = () => {
             <Route path="/login" exact component={Login} />
             <Route path="/register" exact component={Register} />
             <ProtectedRoute path="/themes" exact component={ThemeSelection} />
+            <ProtectedRoute path="/refer" exact component={ReferPage} />
+            <ProtectedRoute path="/wallet" exact component={WalletPage} />
+            <ProtectedRoute path="/deposit" exact component={DepositPage} />
             <ProtectedRoute path="/game" component={GamePage} />
 
             {/* Admin Routes */}
@@ -101,6 +108,8 @@ const App: React.FC = () => {
             <AdminRoute path="/admin/dashboard" exact component={() => <AdminPanel page="dashboard" />} />
             <AdminRoute path="/admin/themes" exact component={() => <AdminPanel page="themes" />} />
             <AdminRoute path="/admin/users" exact component={() => <AdminPanel page="users" />} />
+            <AdminRoute path="/admin/offers" exact component={() => <AdminPanel page="offers" />} />
+            <AdminRoute path="/admin/payments" exact component={() => <AdminPanel page="payments" />} />
             <AdminRoute path="/admin/reports" exact component={() => <AdminPanel page="reports" />} />
             <AdminRoute path="/admin/settings" exact component={() => <AdminPanel page="settings" />} />
 
@@ -201,7 +210,6 @@ const GameContent = styled.div`
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  gap: 30px;
 `;
 
 export default App;

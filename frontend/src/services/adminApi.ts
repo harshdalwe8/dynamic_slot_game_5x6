@@ -208,6 +208,54 @@ export const getRTPReport = async (params: RTPReportParams) => {
   return response.data;
 };
 
+// ============= OFFER CODES =============
+
+export interface OfferCodeDto {
+  id: string;
+  code: string;
+  amount: number;
+  active: boolean;
+  maxUsage?: number | null;
+  usageCount: number;
+  startsAt?: string;
+  endsAt?: string | null;
+  createdAt: string;
+}
+
+export interface CreateOfferCodeRequest {
+  code: string;
+  amount: number;
+  startsAt?: string;
+  endsAt?: string | null;
+  maxUsage?: number;
+  active?: boolean;
+}
+
+export const createOfferCode = async (payload: CreateOfferCodeRequest) => {
+  const response = await adminApi.post('/admin/offer-codes', payload);
+  return response.data as { offer: OfferCodeDto };
+};
+
+export const listOfferCodes = async () => {
+  const response = await adminApi.get('/admin/offer-codes');
+  return response.data as { offers: OfferCodeDto[] };
+};
+
+export const deactivateOfferCode = async (code: string) => {
+  const response = await adminApi.post(`/admin/offer-codes/${code}/deactivate`);
+  return response.data as { offer: OfferCodeDto };
+};
+
+export const activateOfferCode = async (code: string) => {
+  const response = await adminApi.post(`/admin/offer-codes/${code}/activate`);
+  return response.data as { offer: OfferCodeDto };
+};
+
+export const updateOfferCode = async (code: string, payload: Partial<CreateOfferCodeRequest>) => {
+  const response = await adminApi.put(`/admin/offer-codes/${code}`, payload);
+  return response.data as { offer: OfferCodeDto };
+};
+
 export const getAllThemesRTP = async () => {
   const response = await adminApi.get('/admin/reports/rtp/all');
   return response.data;
@@ -412,6 +460,96 @@ export const updateUserRole = async (
 export const updateUserBalance = async (userId: string, balance: number) => {
   const response = await adminApi.put(`/admin/users/${userId}/balance`, { balance });
   return response.data;
+};
+
+// ============= PAYMENT LINKS MANAGEMENT =============
+
+export interface PaymentLink {
+  id: string;
+  name: string;
+  payeeVPA: string;
+  payeeName: string;
+  active: boolean;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  _count?: {
+    deposits: number;
+  };
+}
+
+export interface CreatePaymentLinkRequest {
+  name: string;
+  payeeVPA: string;
+  payeeName: string;
+}
+
+export const createPaymentLink = async (payload: CreatePaymentLinkRequest) => {
+  const response = await adminApi.post('/admin/payment-links', payload);
+  return response.data as { paymentLink: PaymentLink };
+};
+
+export const listPaymentLinks = async () => {
+  const response = await adminApi.get('/admin/payment-links');
+  return response.data as { paymentLinks: PaymentLink[] };
+};
+
+export const updatePaymentLink = async (id: string, payload: Partial<CreatePaymentLinkRequest>) => {
+  const response = await adminApi.put(`/admin/payment-links/${id}`, payload);
+  return response.data as { paymentLink: PaymentLink };
+};
+
+export const deletePaymentLink = async (id: string) => {
+  const response = await adminApi.delete(`/admin/payment-links/${id}`);
+  return response.data;
+};
+
+export const togglePaymentLink = async (id: string) => {
+  const response = await adminApi.post(`/admin/payment-links/${id}/toggle`);
+  return response.data as { paymentLink: PaymentLink };
+};
+
+// ============= DEPOSITS MANAGEMENT =============
+
+export interface Deposit {
+  id: string;
+  userId: string;
+  paymentLinkId: string;
+  amount: number; // in cents
+  transactionRef: string;
+  screenshotUrl?: string;
+  status: 'PENDING' | 'SCREENSHOT_UPLOADED' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+  paymentLink?: {
+    id: string;
+    name: string;
+    payeeVPA: string;
+  };
+}
+
+export const listDeposits = async (status?: string, userId?: string, limit = 50, offset = 0) => {
+  const params: any = { limit, offset };
+  if (status) params.status = status;
+  if (userId) params.userId = userId;
+
+  const response = await adminApi.get('/admin/deposits', { params });
+  return response.data as { deposits: Deposit[]; total: number; limit: number; offset: number };
+};
+
+export const approveDeposit = async (depositId: string) => {
+  const response = await adminApi.put(`/admin/deposits/${depositId}/approve`);
+  return response.data as { deposit: Deposit; message: string };
+};
+
+export const rejectDeposit = async (depositId: string, reason?: string) => {
+  const response = await adminApi.put(`/admin/deposits/${depositId}/reject`, { reason });
+  return response.data as { deposit: Deposit; message: string };
 };
 
 // Helper function to download CSV blob

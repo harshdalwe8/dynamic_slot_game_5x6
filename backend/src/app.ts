@@ -15,6 +15,7 @@ import exportRoutes from './routes/exportRoutes';
 import gamificationRoutes from './routes/gamificationRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import demoRoutes from './routes/demoRoutes';
+import depositRoutes from './routes/depositRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { globalLimiter } from './middleware/rateLimiter';
 import { getMetrics } from './utils/metrics';
@@ -72,6 +73,7 @@ app.use('/theme', (req, res, next) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', slotRoutes);
+app.use('/api', depositRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/reports', reportRoutes);
 app.use('/api/admin/export', exportRoutes);

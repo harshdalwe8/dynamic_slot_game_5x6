@@ -12,6 +12,19 @@ import {
   updateUserStatus,
   updateUserRole,
   updateUserBalance,
+  createOfferCode,
+  listOfferCodes,
+  deactivateOfferCode,
+  activateOfferCode,
+  updateOfferCode,
+  createPaymentLink,
+  listPaymentLinks,
+  updatePaymentLink,
+  deletePaymentLink,
+  togglePaymentLink,
+  listDeposits,
+  approveDeposit,
+  rejectDeposit,
 } from '../controllers/adminController';
 
 import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth';
@@ -38,5 +51,24 @@ router.delete('/themes/:themeId', requireSuperAdmin, deleteTheme);
 router.get('/users', getAllUsers);
 router.put('/users/:userId/status', updateUserStatus);
 router.put('/users/:userId/role', requireSuperAdmin, updateUserRole);
+
+// Offer codes management
+router.post('/offer-codes', createOfferCode);
+router.get('/offer-codes', listOfferCodes);
+router.post('/offer-codes/:code/deactivate', deactivateOfferCode);
+router.post('/offer-codes/:code/activate', activateOfferCode);
+router.put('/offer-codes/:code', updateOfferCode);
+
+// Payment links management
+router.post('/payment-links', createPaymentLink);
+router.get('/payment-links', listPaymentLinks);
+router.put('/payment-links/:id', updatePaymentLink);
+router.delete('/payment-links/:id', deletePaymentLink);
+router.post('/payment-links/:id/toggle', togglePaymentLink);
+
+// Deposits management
+router.get('/deposits', listDeposits);
+router.put('/deposits/:depositId/approve', approveDeposit);
+router.put('/deposits/:depositId/reject', rejectDeposit);
 
 export default router;

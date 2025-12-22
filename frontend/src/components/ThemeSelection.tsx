@@ -57,56 +57,71 @@ const ThemeSelection: React.FC = () => {
 
   return (
     <Container>
-      <Header>
-        <LogoSection>
-          <Logo>🎰 Slot Game</Logo>
-          <Greeting>Welcome, {user?.displayName || user?.email}!</Greeting>
-        </LogoSection>
+      <TopBar>
+        <TopLeft>
+          <Brand>SUPER Slot</Brand>
+          <UserPill>{user?.displayName || user?.email}</UserPill>
+        </TopLeft>
         <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
-      </Header>
+      </TopBar>
 
-      <Content>
-        <SectionTitle>Select a Theme</SectionTitle>
-        <Subtitle>Choose your favorite theme and start playing!</Subtitle>
+      <SectionHeader>
+        <SectionTitle>Hot Games</SectionTitle>
+        <Subtitle>Pick a theme and start</Subtitle>
+      </SectionHeader>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-
-        {loading ? (
-          <LoadingMessage>Loading themes...</LoadingMessage>
-        ) : themes.length === 0 ? (
-          <NoThemesMessage>No themes available at the moment.</NoThemesMessage>
-        ) : (
-          <ThemesGrid>
-            {themes.map((theme) => (
-              <ThemeCard
-                key={theme.id}
-                onClick={() => handleSelectTheme(theme.id)}
-                selected={selectedThemeId === theme.id}
-              >
-                <ThemeIcon>🎮</ThemeIcon>
-                <ThemeName>{theme.name}</ThemeName>
-                <ThemeInfo>
-                  <InfoItem>Min Bet: ${theme.minBet}</InfoItem>
-                  <InfoItem>Max Bet: ${theme.maxBet}</InfoItem>
-                </ThemeInfo>
-                <ButtonContainer>
-                  <SelectButton>Play Now</SelectButton>
-                  <PreviewButton onClick={(e) => {
-                    e.stopPropagation();
-                    handlePreviewTheme(theme);
-                  }}>
-                    👁️ Preview
-                  </PreviewButton>
-                </ButtonContainer>
-              </ThemeCard>
-            ))}
-          </ThemesGrid>
-        )}
-      </Content>
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+      {loading ? (
+        <LoadingMessage>Loading themes...</LoadingMessage>
+      ) : themes.length === 0 ? (
+        <NoThemesMessage>No themes available right now.</NoThemesMessage>
+      ) : (
+        <CardGrid>
+          {themes.map((theme) => (
+            <GameCard key={theme.id} onClick={() => handleSelectTheme(theme.id)}>
+              <Thumb>
+                <span role="img" aria-label="game">🎮</span>
+              </Thumb>
+              <GameTitle>{theme.name}</GameTitle>
+              <MetaRow>
+                <MetaPill>Min {theme.minBet}</MetaPill>
+                <MetaPill>Max {theme.maxBet}</MetaPill>
+              </MetaRow>
+              <PlayRow>
+                <PlayButton>Play</PlayButton>
+                <PreviewButton onClick={(e) => { e.stopPropagation(); handlePreviewTheme(theme); }}>Preview</PreviewButton>
+              </PlayRow>
+            </GameCard>
+          ))}
+        </CardGrid>
+      )}
 
       <PreviewModal isOpen={showPreview} onClose={handleClosePreview}>
         {previewTheme && <ThemePreview theme={previewTheme} onClose={handleClosePreview} />}
       </PreviewModal>
+
+      <BottomNav>
+        <NavItem onClick={() => history.push('/themes')} $active>
+          <span>🏠</span>
+          <small>Home</small>
+        </NavItem>
+        <NavItem onClick={() => history.push('/deposit')}>
+          <span>💳</span>
+          <small>Deposit</small>
+        </NavItem>
+        <NavItem onClick={() => history.push('/refer')}>
+          <span>🤝</span>
+          <small>Refer</small>
+        </NavItem>
+        <NavItem onClick={() => history.push('/wallet')}>
+          <span>💰</span>
+          <small>Wallet</small>
+        </NavItem>
+        <NavItem onClick={() => history.push('/profile')}>
+          <span>👤</span>
+          <small>Profile</small>
+        </NavItem>
+      </BottomNav>
     </Container>
   );
 };
@@ -114,11 +129,49 @@ const ThemeSelection: React.FC = () => {
 // ============= STYLED COMPONENTS =============
 
 const Container = styled.div`
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #1f2d50, #0e1425 60%);
+  padding: 16px 16px 86px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+`;
+
+const TopBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+`;
+
+const TopLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const Brand = styled.div`
+  color: #ffda79;
+  font-weight: 800;
+  font-size: 1.2rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+`;
+
+const UserPill = styled.div`
+  padding: 6px 12px;
+  background: linear-gradient(120deg, #243b55, #141e30);
+  border-radius: 18px;
+  color: #f3f7ff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const SectionHeader = styled.div`
+  padding: 0 4px;
+  margin-bottom: 10px;
 `;
 
 const Header = styled.div`
@@ -193,222 +246,143 @@ const Content = styled.div`
 `;
 
 const SectionTitle = styled.h2`
-  font-size: 2.5rem;
-  color: white;
+  font-size: 1.3rem;
+  color: #fdfdfd;
   margin: 0;
-  text-align: center;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-
-  @media (max-width: 768px) {
-    font-size: 2rem;
-  }
 `;
 
 const Subtitle = styled.p`
-  font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0;
-  text-align: center;
-
-  @media (max-width: 768px) {
-    font-size: 1rem;
-  }
+  font-size: 0.95rem;
+  color: #9fb3ff;
+  margin: 4px 0 0;
 `;
 
 const ErrorMessage = styled.div`
-  background-color: #ff6b6b;
-  color: white;
-  padding: 15px;
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff9b9b;
+  padding: 12px;
   border-radius: 10px;
-  margin: 20px 0;
+  margin: 8px 0 14px;
   text-align: center;
-  font-weight: 600;
-  max-width: 500px;
+  border: 1px solid rgba(255, 107, 107, 0.3);
 `;
 
 const LoadingMessage = styled.div`
-  font-size: 1.5rem;
-  color: white;
+  font-size: 1.05rem;
+  color: #cdd6ff;
   text-align: center;
-  padding: 40px;
+  padding: 20px;
 `;
 
 const NoThemesMessage = styled.div`
-  font-size: 1.5rem;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.05rem;
+  color: #cdd6ff;
   text-align: center;
-  padding: 40px;
-`;
-
-const ThemesGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 25px;
-  width: 100%;
-  max-width: 1200px;
   padding: 20px;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 20px;
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 15px;
-    padding: 10px;
-  }
-
-  @media (max-width: 480px) {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 5px;
-  }
 `;
 
-const ThemeCard = styled.div<{ selected?: boolean }>`
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 240, 240, 0.95) 100%);
-  border: 3px solid ${(props) => (props.selected ? '#ffd700' : '#ddd')};
-  border-radius: 15px;
-  padding: 25px;
+const CardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+`;
+
+const GameCard = styled.div`
+  background: linear-gradient(145deg, #1f2850, #141a33);
+  border-radius: 14px;
+  padding: 10px;
+  color: #e8edff;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
-  transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 15px;
-  box-shadow: ${(props) =>
-    props.selected
-      ? '0 8px 25px rgba(255, 215, 0, 0.4), 0 0 20px rgba(255, 215, 0, 0.3)'
-      : '0 4px 15px rgba(0, 0, 0, 0.1)'};
-
-  &:hover {
-    transform: translateY(-8px);
-    border-color: #ffd700;
-    box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3), 0 0 20px rgba(255, 215, 0, 0.2);
-  }
-
-  &:active {
-    transform: translateY(-4px);
-  }
-
-  @media (max-width: 480px) {
-    padding: 20px;
-  }
+  gap: 8px;
 `;
 
-const ThemeIcon = styled.div`
-  font-size: 3.5rem;
+const Thumb = styled.div`
+  background: linear-gradient(120deg, #ff9f1c, #ff3c83);
+  height: 120px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 80px;
-  width: 80px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
+  font-size: 2rem;
   color: white;
-
-  @media (max-width: 480px) {
-    font-size: 2.5rem;
-    height: 60px;
-    width: 60px;
-  }
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.15);
 `;
 
-const ThemeName = styled.h3`
-  font-size: 1.3rem;
-  margin: 0;
-  color: #333;
-  text-align: center;
-  font-weight: 700;
-
-  @media (max-width: 480px) {
-    font-size: 1.1rem;
-  }
-`;
-
-const ThemeInfo = styled.div`
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-`;
-
-const InfoItem = styled.span`
-  background: #f0f0f0;
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  color: #555;
-  font-weight: 600;
-
-  @media (max-width: 480px) {
-    font-size: 0.85rem;
-    padding: 4px 10px;
-  }
-`;
-
-const SelectButton = styled.button`
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+const GameTitle = styled.div`
+  font-weight: 800;
   font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
-
-  &:hover {
-    transform: scale(1.05);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
-
-  @media (max-width: 480px) {
-    font-size: 0.9rem;
-    padding: 8px 16px;
-  }
+  color: #fdfdfd;
 `;
 
-const ButtonContainer = styled.div`
+const MetaRow = styled.div`
   display: flex;
-  gap: 10px;
-  width: 100%;
+  gap: 6px;
+`;
+
+const MetaPill = styled.span`
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: #cdd6ff;
+`;
+
+const PlayRow = styled.div`
+  display: flex;
+  gap: 8px;
+`;
+
+const PlayButton = styled.button`
+  flex: 1;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #ffb347, #ff6b6b);
+  color: #1b1b1b;
+  border: none;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
 `;
 
 const PreviewButton = styled.button`
-  background: rgba(255, 215, 0, 0.2);
-  color: #ffd700;
-  border: 2px solid #ffd700;
-  padding: 10px 15px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e8edff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
+`;
 
-  &:hover {
-    background: #ffd700;
-    color: #000;
-    transform: scale(1.05);
-    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
-  }
+const BottomNav = styled.div`
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 66px;
+  background: #0b1020;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  padding: 6px 12px;
+`;
 
-  &:active {
-    transform: scale(0.98);
-  }
-
-  @media (max-width: 480px) {
-    font-size: 0.8rem;
-    padding: 8px 10px;
-  }
+const NavItem = styled.div<{ $active?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: ${(p) => (p.$active ? '#ffda79' : '#e8edff')};
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.9rem;
 `;
 
 export default ThemeSelection;

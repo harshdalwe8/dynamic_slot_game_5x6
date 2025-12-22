@@ -699,3 +699,502 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to update user role' });
   }
 };
+
+/**
+ * POST /api/admin/offer-codes - Create a new offer code
+ */
+export const createOfferCode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code, amount, startsAt, endsAt, maxUsage, active = true } = req.body;
+    if (!code || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Code and positive amount are required' });
+    }
+    if (startsAt && endsAt && new Date(startsAt) >= new Date(endsAt)) {
+      return res.status(400).json({ error: 'startsAt must be before endsAt' });
+    }
+
+    const existing = await prisma.offerCode.findUnique({ where: { code } });
+    if (existing) {
+      return res.status(400).json({ error: 'Offer code already exists' });
+    }
+
+    const offer = await prisma.offerCode.create({
+      data: {
+        code,
+        amount: Math.floor(amount),
+        startsAt: startsAt ? new Date(startsAt) : new Date(),
+        endsAt: endsAt ? new Date(endsAt) : null,
+        maxUsage: typeof maxUsage === 'number' ? Math.floor(maxUsage) : null,
+        active: Boolean(active),
+        createdById: req.user!.id,
+      },
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'CREATE_OFFER_CODE',
+        objectType: 'offer_code',
+        objectId: offer.id,
+        payload: { code, amount, startsAt, endsAt, maxUsage, active },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.status(201).json({ offer });
+  } catch (error: any) {
+    console.error('Create offer code error:', error);
+    res.status(500).json({ error: 'Failed to create offer code' });
+  }
+};
+
+/**
+ * GET /api/admin/offer-codes - List offer codes
+ */
+export const listOfferCodes = async (req: AuthRequest, res: Response) => {
+  try {
+    const offers = await prisma.offerCode.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        amount: true,
+        active: true,
+        maxUsage: true,
+        usageCount: true,
+        startsAt: true,
+        endsAt: true,
+        createdAt: true,
+      },
+    });
+    res.json({ offers });
+  } catch (error: any) {
+    console.error('List offer codes error:', error);
+    res.status(500).json({ error: 'Failed to list offer codes' });
+  }
+};
+
+/**
+ * POST /api/admin/offer-codes/:code/deactivate - Deactivate an offer code
+ */
+export const deactivateOfferCode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.params;
+    const offer = await prisma.offerCode.findUnique({ where: { code } });
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer code not found' });
+    }
+    const updated = await prisma.offerCode.update({
+      where: { id: offer.id },
+      data: { active: false },
+    });
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'DEACTIVATE_OFFER_CODE',
+        objectType: 'offer_code',
+        objectId: offer.id,
+        payload: { code },
+        ip: req.ip || 'unknown',
+      },
+    });
+    res.json({ offer: updated });
+  } catch (error: any) {
+    console.error('Deactivate offer code error:', error);
+    res.status(500).json({ error: 'Failed to deactivate offer code' });
+  }
+};
+
+/**
+ * POST /api/admin/offer-codes/:code/activate - Activate an offer code
+ */
+export const activateOfferCode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.params;
+    const offer = await prisma.offerCode.findUnique({ where: { code } });
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer code not found' });
+    }
+    const updated = await prisma.offerCode.update({
+      where: { id: offer.id },
+      data: { active: true },
+    });
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'ACTIVATE_OFFER_CODE',
+        objectType: 'offer_code',
+        objectId: offer.id,
+        payload: { code },
+        ip: req.ip || 'unknown',
+      },
+    });
+    res.json({ offer: updated });
+  } catch (error: any) {
+    console.error('Activate offer code error:', error);
+    res.status(500).json({ error: 'Failed to activate offer code' });
+  }
+};
+
+/**
+ * PUT /api/admin/offer-codes/:code - Update offer code details (dates, amount, maxUsage, active)
+ */
+export const updateOfferCode = async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.params;
+    const { amount, startsAt, endsAt, maxUsage, active } = req.body;
+
+    const offer = await prisma.offerCode.findUnique({ where: { code } });
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer code not found' });
+    }
+
+    if (startsAt && endsAt && new Date(startsAt) >= new Date(endsAt)) {
+      return res.status(400).json({ error: 'startsAt must be before endsAt' });
+    }
+
+    const updated = await prisma.offerCode.update({
+      where: { id: offer.id },
+      data: {
+        ...(typeof amount === 'number' && amount > 0 ? { amount: Math.floor(amount) } : {}),
+        ...(startsAt ? { startsAt: new Date(startsAt) } : {}),
+        ...(endsAt ? { endsAt: new Date(endsAt) } : { endsAt: endsAt === null ? null : undefined }),
+        ...(typeof maxUsage === 'number' ? { maxUsage: Math.floor(maxUsage) } : {}),
+        ...(typeof active === 'boolean' ? { active } : {}),
+      },
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'UPDATE_OFFER_CODE',
+        objectType: 'offer_code',
+        objectId: offer.id,
+        payload: { amount, startsAt, endsAt, maxUsage, active },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ offer: updated });
+  } catch (error: any) {
+    console.error('Update offer code error:', error);
+    res.status(500).json({ error: 'Failed to update offer code' });
+  }
+};
+
+// ============= PAYMENT LINKS =============
+
+/**
+ * POST /api/admin/payment-links - Create a new UPI payment link template
+ */
+export const createPaymentLink = async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, payeeVPA, payeeName } = req.body;
+    const createdBy = req.user!.id;
+
+    // Validate required fields
+    if (!name || !payeeVPA || !payeeName) {
+      return res.status(400).json({ error: 'Name, Payee VPA, and Payee Name are required' });
+    }
+
+    // Create payment link
+    const paymentLink = await prisma.paymentLink.create({
+      data: {
+        name,
+        payeeVPA,
+        payeeName,
+        createdBy,
+        active: true,
+      },
+    });
+
+    // Log admin action
+    try {
+      await prisma.adminLog.create({
+        data: {
+          adminId: createdBy,
+          action: 'CREATE_PAYMENT_LINK',
+          objectType: 'payment_link',
+          objectId: paymentLink.id,
+          payload: { name, payeeVPA },
+          ip: req.ip || 'unknown',
+        },
+      });
+    } catch (logError) {
+      console.error('Failed to create admin log (non-critical):', logError);
+    }
+
+    res.status(201).json({ paymentLink });
+  } catch (error: any) {
+    console.error('Create payment link error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+    });
+    res.status(500).json({ error: 'Failed to create payment link', details: error.message });
+  }
+};
+
+/**
+ * GET /api/admin/payment-links - Get all payment link templates
+ */
+export const listPaymentLinks = async (req: AuthRequest, res: Response) => {
+  try {
+    const paymentLinks = await prisma.paymentLink.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { deposits: true },
+        },
+      },
+    });
+
+    res.json({ paymentLinks });
+  } catch (error: any) {
+    console.error('List payment links error:', error);
+    res.status(500).json({ error: 'Failed to list payment links' });
+  }
+};
+
+/**
+ * PUT /api/admin/payment-links/:id - Update payment link
+ */
+export const updatePaymentLink = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, payeeVPA, payeeName, active } = req.body;
+
+    const paymentLink = await prisma.paymentLink.findUnique({ where: { id } });
+    if (!paymentLink) {
+      return res.status(404).json({ error: 'Payment link not found' });
+    }
+
+    const updated = await prisma.paymentLink.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(payeeVPA ? { payeeVPA } : {}),
+        ...(payeeName ? { payeeName } : {}),
+        ...(typeof active === 'boolean' ? { active } : {}),
+      },
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'UPDATE_PAYMENT_LINK',
+        objectType: 'payment_link',
+        objectId: id,
+        payload: { name, active },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ paymentLink: updated });
+  } catch (error: any) {
+    console.error('Update payment link error:', error);
+    res.status(500).json({ error: 'Failed to update payment link' });
+  }
+};
+
+/**
+ * DELETE /api/admin/payment-links/:id - Delete payment link
+ */
+export const deletePaymentLink = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const paymentLink = await prisma.paymentLink.findUnique({ where: { id } });
+    if (!paymentLink) {
+      return res.status(404).json({ error: 'Payment link not found' });
+    }
+
+    await prisma.paymentLink.delete({ where: { id } });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'DELETE_PAYMENT_LINK',
+        objectType: 'payment_link',
+        objectId: id,
+        payload: { name: paymentLink.name },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ message: 'Payment link deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete payment link error:', error);
+    res.status(500).json({ error: 'Failed to delete payment link' });
+  }
+};
+
+/**
+ * POST /api/admin/payment-links/:id/toggle - Toggle payment link active status
+ */
+export const togglePaymentLink = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const paymentLink = await prisma.paymentLink.findUnique({ where: { id } });
+    if (!paymentLink) {
+      return res.status(404).json({ error: 'Payment link not found' });
+    }
+
+    const updated = await prisma.paymentLink.update({
+      where: { id },
+      data: { active: !paymentLink.active },
+    });
+
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: updated.active ? 'ACTIVATE_PAYMENT_LINK' : 'DEACTIVATE_PAYMENT_LINK',
+        objectType: 'payment_link',
+        objectId: id,
+        payload: { name: paymentLink.name, active: updated.active },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ paymentLink: updated });
+  } catch (error: any) {
+    console.error('Toggle payment link error:', error);
+    res.status(500).json({ error: 'Failed to toggle payment link' });
+  }
+};
+
+// ============= DEPOSITS MANAGEMENT =============
+
+/**
+ * GET /api/admin/deposits - Get all user deposits (admin view)
+ */
+export const listDeposits = async (req: AuthRequest, res: Response) => {
+  try {
+    const { status, userId, limit = '50', offset = '0' } = req.query;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (userId) where.userId = userId;
+
+    const deposits = await prisma.deposit.findMany({
+      where,
+      include: {
+        user: { select: { id: true, email: true, displayName: true } },
+        paymentLink: { select: { id: true, name: true, payeeVPA: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit as string),
+      skip: parseInt(offset as string),
+    });
+
+    const total = await prisma.deposit.count({ where });
+
+    res.json({ deposits, total, limit: parseInt(limit as string), offset: parseInt(offset as string) });
+  } catch (error: any) {
+    console.error('List deposits error:', error);
+    res.status(500).json({ error: 'Failed to list deposits' });
+  }
+};
+
+/**
+ * PUT /api/admin/deposits/:depositId/approve - Approve deposit and credit wallet
+ */
+export const approveDeposit = async (req: AuthRequest, res: Response) => {
+  try {
+    const { depositId } = req.params;
+
+    const deposit = await prisma.deposit.findUnique({
+      where: { id: depositId },
+      include: { user: true },
+    });
+
+    if (!deposit) {
+      return res.status(404).json({ error: 'Deposit not found' });
+    }
+
+    if (deposit.status !== 'SCREENSHOT_UPLOADED') {
+      return res.status(400).json({ error: 'Deposit is not awaiting approval' });
+    }
+
+    // Credit user wallet
+    await prisma.wallet.update({
+      where: { userId: deposit.userId },
+      data: { balance: { increment: deposit.amount } },
+    });
+
+    // Create transaction record
+    await prisma.transaction.create({
+      data: {
+        userId: deposit.userId,
+        amount: deposit.amount,
+        type: 'CREDIT',
+        balanceAfter: (await prisma.wallet.findUnique({ where: { userId: deposit.userId } }))?.balance || 0,
+        reason: `Deposit approved - UPI Transfer (${deposit.transactionRef})`,
+        reference: deposit.id,
+      },
+    });
+
+    // Update deposit status
+    const updated = await prisma.deposit.update({
+      where: { id: depositId },
+      data: { status: 'APPROVED' },
+    });
+
+    // Log admin action
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'APPROVE_DEPOSIT',
+        objectType: 'deposit',
+        objectId: depositId,
+        payload: { userId: deposit.userId, amount: deposit.amount, transactionRef: deposit.transactionRef },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ deposit: updated, message: 'Deposit approved and wallet credited' });
+  } catch (error: any) {
+    console.error('Approve deposit error:', error);
+    res.status(500).json({ error: 'Failed to approve deposit' });
+  }
+};
+
+/**
+ * PUT /api/admin/deposits/:depositId/reject - Reject deposit
+ */
+export const rejectDeposit = async (req: AuthRequest, res: Response) => {
+  try {
+    const { depositId } = req.params;
+    const { reason } = req.body;
+
+    const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
+
+    if (!deposit) {
+      return res.status(404).json({ error: 'Deposit not found' });
+    }
+
+    const updated = await prisma.deposit.update({
+      where: { id: depositId },
+      data: { status: 'REJECTED' },
+    });
+
+    // Log admin action
+    await prisma.adminLog.create({
+      data: {
+        adminId: req.user!.id,
+        action: 'REJECT_DEPOSIT',
+        objectType: 'deposit',
+        objectId: depositId,
+        payload: { userId: deposit.userId, reason },
+        ip: req.ip || 'unknown',
+      },
+    });
+
+    res.json({ deposit: updated, message: 'Deposit rejected' });
+  } catch (error: any) {
+    console.error('Reject deposit error:', error);
+    res.status(500).json({ error: 'Failed to reject deposit' });
+  }
+};

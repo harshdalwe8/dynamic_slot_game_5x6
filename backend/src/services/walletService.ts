@@ -243,3 +243,131 @@ export async function adminAdjustment(
     reference: `admin_adjustment_${Date.now()}`,
   });
 }
+
+/**
+ * Apply referral bonus to a new user and optionally the referrer.
+ * Both credits are executed atomically.
+ */
+export async function applyReferralBonus(
+  newUserId: string,
+  referrerUserId: string,
+  newUserAmount: number,
+  referrerAmount: number
+): Promise<{ newUserBalance: number; referrerBalance?: number }> {
+  return await (prisma.$transaction as any)(async (tx: any) => {
+    // Validate wallets
+    const [newUserWallet, refWallet] = await Promise.all([
+      tx.wallet.findUnique({ where: { userId: newUserId } }),
+      tx.wallet.findUnique({ where: { userId: referrerUserId } }),
+    ]);
+    if (!newUserWallet || !refWallet) {
+      throw new Error('Wallet not found for referral participants');
+    }
+
+    // Credit new user
+    const newUserBalance = newUserWallet.balance + Math.abs(newUserAmount);
+    await tx.wallet.update({ where: { userId: newUserId }, data: { balance: newUserBalance } });
+    await tx.transaction.create({
+      data: {
+        userId: newUserId,
+        amount: Math.abs(newUserAmount),
+        type: 'REFERRAL',
+        balanceAfter: newUserBalance,
+        reason: 'Referral signup bonus',
+        reference: `referral_${referrerUserId}`,
+      },
+    });
+
+    // Credit referrer if any amount specified
+    let referrerBalance: number | undefined = undefined;
+    if (referrerAmount && referrerAmount > 0) {
+      const nextRefBalance = refWallet.balance + Math.abs(referrerAmount);
+      await tx.wallet.update({ where: { userId: referrerUserId }, data: { balance: nextRefBalance } });
+      await tx.transaction.create({
+        data: {
+          userId: referrerUserId,
+          amount: Math.abs(referrerAmount),
+          type: 'REFERRAL',
+          balanceAfter: nextRefBalance,
+          reason: 'Referral reward for inviting user',
+          reference: `referral_${newUserId}`,
+        },
+      });
+      referrerBalance = nextRefBalance;
+    }
+
+    return { newUserBalance, referrerBalance };
+  });
+}
+
+/**
+ * Redeem an admin-issued offer code for a user.
+ * Validates code, usage, expiration, and per-user redemption.
+ */
+export async function redeemOfferCode(
+  userId: string,
+  code: string
+): Promise<{ newBalance: number }> {
+  return await (prisma.$transaction as any)(async (tx: any) => {
+    const offer = await tx.offerCode.findUnique({ where: { code } });
+    if (!offer || !offer.active) {
+      throw new Error('Invalid or inactive offer code');
+    }
+    const now = new Date();
+    if (offer.startsAt && offer.startsAt > now) {
+      throw new Error('Offer code is not yet active');
+    }
+    if (offer.endsAt && offer.endsAt < now) {
+      throw new Error('Offer code has expired');
+    }
+    if (offer.maxUsage && offer.usageCount >= offer.maxUsage) {
+      throw new Error('Offer code usage limit reached');
+    }
+
+    // Prevent multiple redemption by same user
+    const existingRedemption = await tx.offerRedemption.findFirst({
+      where: { userId, offerCodeId: offer.id },
+    });
+    if (existingRedemption) {
+      throw new Error('Offer code already redeemed');
+    }
+
+    // Credit wallet and create coupon transaction
+    const wallet = await tx.wallet.findUnique({ where: { userId } });
+    if (!wallet) throw new Error('Wallet not found');
+    const newBalance = wallet.balance + Math.abs(offer.amount);
+    await tx.wallet.update({ where: { userId }, data: { balance: newBalance } });
+    await tx.transaction.create({
+      data: {
+        userId,
+        amount: Math.abs(offer.amount),
+        type: 'COUPON',
+        balanceAfter: newBalance,
+        reason: 'Signup offer code',
+        reference: `offer_${offer.code}`,
+      },
+    });
+
+    // Update offer usage and record redemption
+    await tx.offerCode.update({
+      where: { id: offer.id },
+      data: { usageCount: offer.usageCount + 1 },
+    });
+    await tx.offerRedemption.create({
+      data: { userId, offerCodeId: offer.id },
+    });
+
+    // Emit balance update via socket
+    const socket = getSocketService();
+    if (socket) {
+      socket.emitBalanceUpdate(userId, newBalance, {
+        id: `offer_${offer.code}`,
+        amount: Math.abs(offer.amount),
+        type: 'COUPON',
+        reason: 'Signup offer code',
+      });
+    }
+
+    return { newBalance };
+  });
+}

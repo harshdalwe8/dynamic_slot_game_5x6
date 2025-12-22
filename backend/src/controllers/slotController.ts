@@ -272,3 +272,39 @@ export const getWallet = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to get wallet' });
   }
 };
+
+/**
+ * GET /api/wallet/transactions - Get user's transaction history
+ */
+export const getTransactionHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const transactions = await prisma.transaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        balanceAfter: true,
+        reason: true,
+        reference: true,
+        createdAt: true,
+      },
+    });
+
+    const total = await prisma.transaction.count({
+      where: { userId },
+    });
+
+    res.json({ transactions, total, limit, offset });
+  } catch (error: any) {
+    console.error('Get transaction history error:', error);
+    res.status(500).json({ error: 'Failed to get transaction history' });
+  }
+};

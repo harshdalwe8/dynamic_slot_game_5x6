@@ -12,21 +12,30 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  email             String              @unique
+  id                String            @id @default(uuid())
+  email             String            @unique
   passwordHash      String
   displayName       String
   role              UserRole
-  createdAt         DateTime            @default(now())
+  createdAt         DateTime          @default(now())
   lastLogin         DateTime?
-  status            UserStatus          @default(ACTIVE)
+  status            UserStatus        @default(ACTIVE)
   wallets           Wallet[]
   transactions      Transaction[]
   spins             Spin[]
-  adminLogs         AdminLog[]          @relation("AdminUserLogs")
-  adminTransactions Transaction[]       @relation("AdminUser")
+  adminLogs         AdminLog[]        @relation("AdminUserLogs")
+  adminTransactions Transaction[]     @relation("AdminUser")
   sessions          Session[]
   achievements      UserAchievement[]
+  deposits          Deposit[]
+  // Referral system
+  referralCode      String?           @unique
+  referredBy        User?             @relation("UserReferrals", fields: [referredById], references: [id])
+  referredById      String?
+  referrals         User[]            @relation("UserReferrals")
+  // Offer code relations
+  createdOfferCodes OfferCode[]       @relation("OfferCodeCreator")
+  offerRedemptions  OfferRedemption[]
 }
 
 enum UserRole {
@@ -189,12 +198,12 @@ model UserAchievement {
 }
 
 model Leaderboard {
-  id        String           @id @default(uuid())
+  id        String             @id @default(uuid())
   type      LeaderboardType
   period    LeaderboardPeriod
   startDate DateTime
   endDate   DateTime
-  createdAt DateTime         @default(now())
+  createdAt DateTime           @default(now())
   entries   LeaderboardEntry[]
 }
 
@@ -224,4 +233,68 @@ model LeaderboardEntry {
   createdAt     DateTime    @default(now())
 
   @@unique([leaderboardId, userId])
+}
+
+// Admin-issued offer codes (promo/coupon system)
+model OfferCode {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  amount      Int
+  active      Boolean           @default(true)
+  maxUsage    Int?
+  usageCount  Int               @default(0)
+  startsAt    DateTime          @default(now())
+  endsAt      DateTime?
+  createdAt   DateTime          @default(now())
+  createdBy   User?             @relation("OfferCodeCreator", fields: [createdById], references: [id])
+  createdById String?
+  redemptions OfferRedemption[]
+}
+
+// Track which user redeemed which offer code
+model OfferRedemption {
+  id          String    @id @default(uuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  offerCode   OfferCode @relation(fields: [offerCodeId], references: [id])
+  offerCodeId String
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, offerCodeId])
+}
+
+// UPI Payment Links (template)
+model PaymentLink {
+  id          String   @id @default(uuid())
+  name        String
+  payeeVPA    String   // pa: merchant's UPI ID
+  payeeName   String   // pn: merchant's display name
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  createdBy   String
+  updatedAt   DateTime @updatedAt
+  deposits    Deposit[]
+}
+
+// User deposit requests
+model Deposit {
+  id               String       @id @default(uuid())
+  user             User         @relation(fields: [userId], references: [id])
+  userId           String
+  paymentLink      PaymentLink  @relation(fields: [paymentLinkId], references: [id])
+  paymentLinkId    String
+  amount           Int          // in cents (e.g., 10000 = 100 INR)
+  currency         String       @default("INR")
+  transactionRef   String       @unique // 12-char alphanumeric
+  screenshotUrl    String?      // path to uploaded screenshot
+  status           DepositStatus @default(PENDING)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+enum DepositStatus {
+  PENDING          // Awaiting payment confirmation
+  SCREENSHOT_UPLOADED // User uploaded screenshot
+  APPROVED         // Admin approved, wallet credited
+  REJECTED         // Admin rejected
 }

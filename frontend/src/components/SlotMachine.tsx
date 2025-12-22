@@ -4,10 +4,30 @@ import { useLocation, useHistory } from 'react-router-dom';
 import styled, { keyframes, css } from 'styled-components';
 
 // ============= KEYFRAME ANIMATIONS =============
-const spinAnimation = keyframes`
-  0% { transform: translateY(-100%); }
-  50% { transform: translateY(-50%); }
-  100% { transform: translateY(0); }
+const symbolFloatLeft = keyframes`
+  0% { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-100%) scale(0.8); opacity: 0.3; }
+`;
+
+const symbolFloatRight = keyframes`
+  0% { transform: translateX(0) scale(1); opacity: 1; }
+  100% { transform: translateX(100%) scale(0.8); opacity: 0.3; }
+`;
+
+const symbolBounce = keyframes`
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-8px) scale(1.02); }
+  50% { transform: translateY(0) scale(1); }
+  75% { transform: translateY(-4px) scale(1.01); }
+`;
+
+const reelShake = keyframes`
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-2px); }
+  20% { transform: translateX(2px); }
+  30% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  50% { transform: translateX(0); }
 `;
 
 const pulse = keyframes`
@@ -18,6 +38,22 @@ const pulse = keyframes`
 const glow = keyframes`
   0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); }
   50% { box-shadow: 0 6px 25px rgba(88, 210, 255, 0.3); }
+`;
+
+const reelBounce = keyframes`
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.95); }
+  100% { transform: scaleY(1); }
+`;
+
+// Non-linear spin path: ease in, ramp up, then ease out within each loop
+const reelSpin = keyframes`
+  0% { transform: translateY(0); }
+  10% { transform: translateY(-4%); }
+  25% { transform: translateY(-18%); }
+  55% { transform: translateY(-38%); }
+  80% { transform: translateY(-48%); }
+  100% { transform: translateY(-50%); }
 `;
 
 // ============= STYLED COMPONENTS =============
@@ -83,7 +119,11 @@ interface MachineContainerProps {
   $rows?: number;
 }
 
-const MachineContainer = styled.div<MachineContainerProps>`
+interface MachineContainerSpinProps extends MachineContainerProps {
+  $spinning?: boolean;
+}
+
+const MachineContainer = styled.div<MachineContainerSpinProps>`
   width: 86%;
   margin: 48px auto 20px;
   height: ${props => props.$rows ? `calc(${props.$rows} * 110px + 60px)` : '420px'};
@@ -98,8 +138,10 @@ const MachineContainer = styled.div<MachineContainerProps>`
   justify-content: center;
   padding: 26px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 0 40px rgba(217, 70, 239, 0.4), 
-              inset 0 0 30px rgba(255, 255, 255, 0.1);
+  box-shadow: ${props => props.$spinning 
+    ? '0 0 50px rgba(217, 70, 239, 0.6), 0 0 80px rgba(217, 70, 239, 0.4), inset 0 0 40px rgba(255, 0, 255, 0.3)'
+    : '0 0 40px rgba(217, 70, 239, 0.4), inset 0 0 30px rgba(255, 255, 255, 0.1)'};
+  transition: box-shadow 0.3s ease;
   position: relative;
 
   &::before {
@@ -146,8 +188,10 @@ const SlotGrid = styled.div<{ $cols: number }>`
   display: contents;
 `;
 
-const Reel = styled.div`
-  background: linear-gradient(180deg, #e0f4ff 0%, #c8e8ff 50%, #b0dcff 100%);
+const Reel = styled.div<{ $spinning?: boolean }>`
+  background: ${props => props.$spinning 
+    ? 'linear-gradient(180deg, #d0e8ff 0%, #b8dcff 50%, #a0d0ff 100%)'
+    : 'linear-gradient(180deg, #e0f4ff 0%, #c8e8ff 50%, #b0dcff 100%)'};
   border-radius: 12px;
   padding: 10px;
   display: flex;
@@ -164,6 +208,16 @@ const Reel = styled.div`
   border: 3px solid;
   border-image: linear-gradient(180deg, #ffffff 0%, #e0f4ff 100%) 1;
   width: 100%;
+  transition: all 0.2s ease;
+  
+  ${props =>
+    props.$spinning &&
+    css`
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.4),
+                  inset 0 -2px 5px rgba(0, 0, 0, 0.15),
+                  0 0 20px rgba(88, 210, 255, 0.5);
+    `}
 `;
 
 const ReelHold = styled.div`
@@ -184,19 +238,36 @@ const ReelHold = styled.div`
   letter-spacing: 0.5px;
 `;
 
-const ReelSlots = styled.div`
+const ReelSlots = styled.div<{ $spinning?: boolean; $spinDelay?: number }>`
   margin-top: 52px;
   width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
   align-items: center;
   justify-content: center;
 `;
 
-const Symbol = styled.div<{ $winning?: boolean; $spinning?: boolean }>`
+const ReelTrack = styled.div<{ $spinning?: boolean; $reelIndex?: number }>`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  transition: transform 0.5s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+  
+  ${props =>
+    props.$spinning &&
+    css`
+      animation: ${reelSpin} 0.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    `}
+`;
+
+const Symbol = styled.div<{ $winning?: boolean; $spinning?: boolean; $spinDelay?: number }>`
   width: 90%;
   height: 100px;
+  min-height: 100px;
   background: linear-gradient(180deg, #f5fbff 0%, #e8f5ff 50%, #dbe8ff 100%);
   border-radius: 10px;
   display: flex;
@@ -210,15 +281,9 @@ const Symbol = styled.div<{ $winning?: boolean; $spinning?: boolean }>`
               inset 0 -1px 2px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   position: relative;
-  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.2, 1);
   border: 2px solid rgba(255, 255, 255, 0.6);
-  
-  ${props =>
-    props.$spinning &&
-    css`
-      animation: ${spinAnimation} 0.45s cubic-bezier(0.2, 0.9, 0.2, 1);
-      opacity: 0.9;
-    `}
+  transition: all 0.1s ease;
+  flex-shrink: 0;
   
   ${props =>
     props.$winning &&
@@ -498,6 +563,8 @@ const SlotMachine: React.FC = () => {
   const [isLoadingTheme, setIsLoadingTheme] = useState(false);
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
   const [assetManifest, setAssetManifest] = useState<Record<string, any>>({});
+  const [preloadedAssets, setPreloadedAssets] = useState<{ [key: string]: HTMLImageElement }>({});
+  const [isPreloadingAssets, setIsPreloadingAssets] = useState(false);
 
   const defaultSymbols = useMemo(
     () => ['💎', '7️⃣', '🍒', '🔔', '⭐', '🍋', '👑', '♠️', '♥️', '♣️', '♦️'],
@@ -529,9 +596,36 @@ const SlotMachine: React.FC = () => {
     return map;
   }, [themeDetails]);
 
+  // Preload all theme assets
+  const preloadImages = useCallback(async (imageUrls: string[]) => {
+    setIsPreloadingAssets(true);
+    const loadedAssets: { [key: string]: HTMLImageElement } = {};
+    
+    const imagePromises = imageUrls.map((url) => {
+      return new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          loadedAssets[url] = img;
+          resolve();
+        };
+        img.onerror = () => {
+          console.warn(`Failed to preload image: ${url}`);
+          resolve(); // Continue even if one image fails
+        };
+        img.src = url;
+      });
+    });
+
+    await Promise.all(imagePromises);
+    setPreloadedAssets(loadedAssets);
+    setIsPreloadingAssets(false);
+    console.log(`✅ Preloaded ${Object.keys(loadedAssets).length} assets`);
+  }, []);
+
   const getSymbolDisplay = (symbolId: string) => {
     const imageUrl = symbolImageMap[symbolId];
     if (imageUrl) {
+      // Image is already preloaded in browser cache
       return <SymbolImage src={imageUrl} alt={symbolId} />;
     }
     return symbolId; // Fallback to text if no image
@@ -564,6 +658,44 @@ const SlotMachine: React.FC = () => {
         // Extract and store asset manifest
         const manifest = (themeResponse.theme as any).assetManifest || {};
         setAssetManifest(manifest);
+
+        // Preload all theme assets
+        const imagesToPreload: string[] = [];
+        const baseUrl = process.env.REACT_APP_FILE_URL || 'http://localhost:5000';
+
+        // Collect symbol images
+        if (themeResponse.theme.jsonSchema?.symbols) {
+          themeResponse.theme.jsonSchema.symbols.forEach((symbol: any) => {
+            if (symbol.asset) {
+              const assetPath = symbol.asset.replace(/^public\//, '');
+              imagesToPreload.push(`${baseUrl}/${assetPath}`);
+            }
+          });
+        }
+
+        // Collect background image
+        if (manifest?.bkg?.url) {
+          const bgUrl = manifest.bkg.url.startsWith('/') 
+            ? `${baseUrl}${manifest.bkg.url}` 
+            : manifest.bkg.url;
+          imagesToPreload.push(bgUrl);
+        }
+
+        // Collect other asset images (balance, win, etc.)
+        Object.keys(manifest).forEach((key) => {
+          if (manifest[key]?.url && key !== 'bkg') {
+            const assetUrl = manifest[key].url.startsWith('/')
+              ? `${baseUrl}${manifest[key].url}`
+              : manifest[key].url;
+            imagesToPreload.push(assetUrl);
+          }
+        });
+
+        // Preload all collected images
+        if (imagesToPreload.length > 0) {
+          console.log(`🔄 Preloading ${imagesToPreload.length} assets...`);
+          await preloadImages(imagesToPreload);
+        }
       }
 
       // Handle both response formats: { wallet: { balance } } or { balance }
@@ -578,7 +710,7 @@ const SlotMachine: React.FC = () => {
       setIsLoadingTheme(false);
       setIsLoadingWallet(false);
     }
-  }, []);
+  }, [preloadImages]);
 
   const loadThemes = useCallback(async () => {
     try {
@@ -665,7 +797,7 @@ const SlotMachine: React.FC = () => {
               }
               spinResults[col] = colSymbols;
               resolve();
-            }, 1000 + col * 200);
+            }, 600 + col * 80);
           })
         );
       }
@@ -745,7 +877,12 @@ const SlotMachine: React.FC = () => {
     <GameWrapper backgroundUrl={backgroundUrl}>
       {/* Error Message */}
       {(isLoadingTheme || isLoadingWallet) && (
-        <LoadingNotice>Loading theme and wallet...</LoadingNotice>
+        <LoadingNotice>
+          {isPreloadingAssets ? 'Loading assets...' : 'Loading theme and wallet...'}
+        </LoadingNotice>
+      )}
+      {isPreloadingAssets && !isLoadingTheme && (
+        <LoadingNotice>🎨 Preloading {Object.keys(preloadedAssets).length} assets...</LoadingNotice>
       )}
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -754,22 +891,32 @@ const SlotMachine: React.FC = () => {
       {showWinMessage && <WinMessage>🎉 WIN: {Math.floor(lastWin || 0).toLocaleString()} 🎉</WinMessage>}
 
       {/* Machine Container */}
-      <MachineContainer $rows={rows}>
+      <MachineContainer $rows={rows} $spinning={isSpinning}>
         <MainPlayArea $cols={cols}>
           {/* Reels */}
           {Array.from({ length: cols }).map((_, colIdx) => (
-            <Reel key={colIdx}>
+            <Reel key={colIdx} $spinning={isSpinning}>
               <ReelHold>Hold</ReelHold>
               <ReelSlots>
-                {grid.map((row, rowIdx) => (
-                  <Symbol
-                    key={`${rowIdx}-${colIdx}`}
-                    $spinning={isSpinning}
-                    $winning={winningPositions.has(`${rowIdx}-${colIdx}`)}
-                  >
-                    {getSymbolDisplay(row[colIdx])}
-                  </Symbol>
-                ))}
+                <ReelTrack $spinning={isSpinning} $reelIndex={colIdx}>
+                  {/* First set of symbols */}
+                  {grid.map((row, rowIdx) => (
+                    <Symbol
+                      key={`${rowIdx}-${colIdx}`}
+                      $winning={winningPositions.has(`${rowIdx}-${colIdx}`)}
+                    >
+                      {getSymbolDisplay(row[colIdx])}
+                    </Symbol>
+                  ))}
+                  {/* Duplicate symbols for smooth loop */}
+                  {isSpinning && grid.map((row, rowIdx) => (
+                    <Symbol
+                      key={`dup-${rowIdx}-${colIdx}`}
+                    >
+                      {getSymbolDisplay(row[colIdx])}
+                    </Symbol>
+                  ))}
+                </ReelTrack>
               </ReelSlots>
             </Reel>
           ))}
@@ -778,15 +925,6 @@ const SlotMachine: React.FC = () => {
 
       {/* Footer Controls */}
       <ControlsContainer>
-        <ControlBlock>
-          <Label>Lines</Label>
-          <Counter>
-            <CounterBtn>-</CounterBtn>
-            <CounterValue>{assetManifest?.lines_label?.url ? `url(${assetManifest.lines_label.url})` : ''}</CounterValue>
-            <CounterBtn>+</CounterBtn>
-          </Counter>
-        </ControlBlock>
-
         <ControlBlock>
           <Label>Total Bet</Label>
           <Counter>
@@ -797,7 +935,7 @@ const SlotMachine: React.FC = () => {
         </ControlBlock>
 
         <SpinContainer>
-          <SpinBtn onClick={handleSpin} disabled={isSpinning || isLoadingTheme || isLoadingWallet}>
+          <SpinBtn onClick={handleSpin} disabled={isSpinning || isLoadingTheme || isLoadingWallet || isPreloadingAssets}>
             Spin
             <br />
             <SpinBtnSubtext>Hold for AutoSpin</SpinBtnSubtext>

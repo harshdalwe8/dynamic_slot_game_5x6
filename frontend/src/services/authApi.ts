@@ -13,6 +13,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   displayName: string;
+  referralCode?: string;
+  offerCode?: string;
 }
 
 export interface LoginRequest {
@@ -27,9 +29,16 @@ export interface AuthResponse {
     displayName: string;
     role: 'PLAYER' | 'SUPER_ADMIN' | 'GAME_MANAGER' | 'SUPPORT_STAFF';
     status: string;
+    referralCode?: string;
   };
   accessToken: string;
   refreshToken: string;
+  referralStatus?: {
+    provided: boolean;
+    valid: boolean;
+    appliedBonus: boolean;
+    message?: string;
+  };
 }
 
 export interface RefreshTokenRequest {
@@ -49,17 +58,22 @@ export interface UserProfile {
   status: string;
   createdAt: string;
   lastLogin: string;
+  referralCode?: string;
 }
 
 export const registerUser = async (
   email: string,
   password: string,
-  displayName: string
+  displayName: string,
+  referralCode?: string,
+  offerCode?: string
 ): Promise<AuthResponse> => {
   const response = await authApi.post('/auth/register', {
     email,
     password,
     displayName,
+    ...(referralCode ? { referralCode } : {}),
+    ...(offerCode ? { offerCode } : {}),
   });
   return response.data;
 };
@@ -80,6 +94,19 @@ export const refreshAccessToken = async (refreshToken: string): Promise<RefreshT
 export const logoutUser = async (accessToken: string): Promise<{ message: string }> => {
   const response = await authApi.post(
     '/auth/logout',
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+  return response.data;
+};
+
+export const regenerateReferralCode = async (accessToken: string): Promise<{ referralCode: string }> => {
+  const response = await authApi.post(
+    '/auth/referral/regenerate',
     {},
     {
       headers: {

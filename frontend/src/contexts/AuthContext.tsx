@@ -6,6 +6,7 @@ interface User {
   email: string;
   displayName?: string;
   role: 'PLAYER' | 'SUPER_ADMIN' | 'GAME_MANAGER' | 'SUPPORT_STAFF';
+  referralCode?: string;
   isGuest?: boolean;
 }
 
@@ -19,10 +20,17 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    displayName: string,
+    referralCode?: string,
+    offerCode?: string
+  ) => Promise<import('../services/authApi').AuthResponse>;
   loginAsGuest: () => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
+  setReferralCode: (referralCode: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -109,9 +117,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, displayName: string) => {
+  const register = async (
+    email: string,
+    password: string,
+    displayName: string,
+    referralCode?: string,
+    offerCode?: string
+  ): Promise<import('../services/authApi').AuthResponse> => {
     try {
-      const response = await registerUser(email, password, displayName);
+      const response = await registerUser(email, password, displayName, referralCode, offerCode);
       const { accessToken, refreshToken, user } = response;
 
       // Store tokens and user
@@ -126,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: true,
         isLoading: false,
       });
+      return response;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Registration failed');
     }
@@ -194,6 +209,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const setReferralCode = (referralCode: string) => {
+    setAuthState((prev) => {
+      if (!prev.user) return prev;
+      const user = { ...prev.user, referralCode };
+      localStorage.setItem('user', JSON.stringify(user));
+      return { ...prev, user };
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -203,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAsGuest,
         logout,
         refreshAuth,
+        setReferralCode,
       }}
     >
       {children}

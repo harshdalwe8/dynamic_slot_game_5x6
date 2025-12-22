@@ -155,6 +155,90 @@ export const getWalletBalance = async (): Promise<WalletResponse> => {
   return response.data;
 };
 
+export interface Transaction {
+  id: string;
+  type: 'CREDIT' | 'DEBIT' | 'COUPON' | 'REFERRAL' | 'MANUAL' | 'SPIN' | 'WIN' | 'BONUS' | 'JACKPOT';
+  amount: number;
+  balanceAfter: number;
+  reason: string;
+  reference?: string;
+  createdAt: string;
+}
+
+export interface TransactionHistoryResponse {
+  transactions: Transaction[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export const getTransactionHistory = async (
+  limit: number = 50,
+  offset: number = 0
+): Promise<TransactionHistoryResponse> => {
+  const response = await playerApi.get('/wallet/transactions', {
+    params: { limit, offset },
+  });
+  return response.data;
+};
+
+// ============= DEPOSIT/PAYMENT =============
+
+export interface PaymentLinkOption {
+  id: string;
+  name: string;
+  payeeVPA: string;
+  payeeName: string;
+}
+
+export interface DepositInitResponse {
+  deposit: {
+    id: string;
+    transactionRef: string;
+    amount: number;
+    currency: string;
+    paymentLink: PaymentLinkOption;
+  };
+  upiLink: string;
+}
+
+export interface DepositInfo {
+  id: string;
+  amount: number;
+  transactionRef: string;
+  screenshotUrl?: string;
+  status: 'PENDING' | 'SCREENSHOT_UPLOADED' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
+
+export const getActivePaymentLinks = async (): Promise<{ paymentLinks: PaymentLinkOption[] }> => {
+  const response = await playerApi.get('/payment-links/active');
+  return response.data;
+};
+
+export const initDeposit = async (paymentLinkId: string, amount: number): Promise<DepositInitResponse> => {
+  const response = await playerApi.post('/deposits/init', { paymentLinkId, amount });
+  return response.data;
+};
+
+export const uploadDepositScreenshot = async (depositId: string, screenshotUrl: string) => {
+  const response = await playerApi.post(`/deposits/${depositId}/upload-screenshot`, { screenshotUrl });
+  return response.data as { deposit: DepositInfo; message: string };
+};
+
+export const getMyDeposits = async (status?: string, limit = 50, offset = 0) => {
+  const params: any = { limit, offset };
+  if (status) params.status = status;
+
+  const response = await playerApi.get('/deposits/my', { params });
+  return response.data as { deposits: DepositInfo[]; total: number };
+};
+
+export const getDeposit = async (depositId: string) => {
+  const response = await playerApi.get(`/deposits/${depositId}`);
+  return response.data as { deposit: DepositInfo };
+};
+
 // ============= GAMIFICATION =============
 
 export interface Achievement {

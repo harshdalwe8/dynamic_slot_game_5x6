@@ -6,6 +6,8 @@ import ThemeCRUD from './ThemeCRUD';
 import UserManagement from './UserManagement';
 import ReportsAnalytics from './ReportsAnalytics';
 import SettingsPage from './SettingsPage';
+import OfferCodesManagement from './OfferCodesManagement';
+import ManagePayment from './ManagePayment';
 
 interface MenuItem {
   id: string;
@@ -14,7 +16,7 @@ interface MenuItem {
   path: string;
 }
 
-const AdminPanel: React.FC<{ page: 'dashboard' | 'themes' | 'users' | 'reports' | 'settings' }> = ({ page }) => {
+const AdminPanel: React.FC<{ page: 'dashboard' | 'themes' | 'users' | 'reports' | 'settings' | 'offers' | 'payments' }> = ({ page }) => {
   const { user, logout } = useAuth();
   const history = useHistory();
 
@@ -22,6 +24,8 @@ const AdminPanel: React.FC<{ page: 'dashboard' | 'themes' | 'users' | 'reports' 
     { id: 'dashboard', label: 'Dashboard', icon: '📊', path: '/admin/dashboard' },
     { id: 'themes', label: 'Theme Management', icon: '🎨', path: '/admin/themes' },
     { id: 'users', label: 'User Management', icon: '👥', path: '/admin/users' },
+    { id: 'offers', label: 'Manage Offer Codes', icon: '🎟️', path: '/admin/offers' },
+    { id: 'payments', label: 'Manage Payments', icon: '💳', path: '/admin/payments' },
     { id: 'reports', label: 'Reports & Analytics', icon: '📈', path: '/admin/reports' },
     { id: 'settings', label: 'Settings', icon: '⚙️', path: '/admin/settings' },
   ];
@@ -41,6 +45,10 @@ const AdminPanel: React.FC<{ page: 'dashboard' | 'themes' | 'users' | 'reports' 
         return <ThemeCRUD />;
       case 'users':
         return <UserManagement />;
+      case 'offers':
+        return <OfferCodesManagement />;
+      case 'payments':
+        return <ManagePayment />;
       case 'reports':
         return <ReportsAnalytics />;
       case 'settings':
@@ -151,31 +159,6 @@ const DashboardContent = () => (
         </StatInfo>
       </StatCard>
     </StatsGrid>
-
-    <Section>
-      <SectionHeader>
-        <SectionTitle>Quick Actions</SectionTitle>
-      </SectionHeader>
-      <QuickActions>
-        <QuickActionCard>
-          <QuickActionIcon>🎨</QuickActionIcon>
-          <QuickActionLabel>Manage Themes</QuickActionLabel>
-          <QuickActionDesc>Create, edit, or delete game themes</QuickActionDesc>
-        </QuickActionCard>
-
-        <QuickActionCard>
-          <QuickActionIcon>👥</QuickActionIcon>
-          <QuickActionLabel>View Users</QuickActionLabel>
-          <QuickActionDesc>Manage user accounts and permissions</QuickActionDesc>
-        </QuickActionCard>
-
-        <QuickActionCard>
-          <QuickActionIcon>📈</QuickActionIcon>
-          <QuickActionLabel>View Reports</QuickActionLabel>
-          <QuickActionDesc>Access analytics and reports</QuickActionDesc>
-        </QuickActionCard>
-      </QuickActions>
-    </Section>
   </>
 );
 

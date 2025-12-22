@@ -12,6 +12,8 @@ const Register: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const history = useHistory();
+  const [referralCode, setReferralCode] = useState('');
+  const [offerCode, setOfferCode] = useState('');
 
   const validateForm = (): boolean => {
     if (!displayName.trim()) {
@@ -41,7 +43,10 @@ const Register: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await register(email, password, displayName);
+      const resp = await register(email, password, displayName, referralCode || undefined, offerCode || undefined);
+      if (resp?.referralStatus?.provided && !resp.referralStatus.valid) {
+        alert(resp.referralStatus.message || 'Referral code invalid. Account created without referral bonuses.');
+      }
       history.push('/game');
     } catch (err: any) {
       setError(err.message);
@@ -110,6 +115,28 @@ const Register: React.FC = () => {
               required
               disabled={isLoading}
               minLength={6}
+            />
+          </InputGroup>
+
+          <InputGroup>
+            <Label>Referral Code (optional)</Label>
+            <Input
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+              placeholder="Enter your friend's code"
+              disabled={isLoading}
+            />
+          </InputGroup>
+
+          <InputGroup>
+            <Label>Offer Code (optional)</Label>
+            <Input
+              type="text"
+              value={offerCode}
+              onChange={(e) => setOfferCode(e.target.value.toUpperCase())}
+              placeholder="Enter promo/offer code"
+              disabled={isLoading}
             />
           </InputGroup>
 
