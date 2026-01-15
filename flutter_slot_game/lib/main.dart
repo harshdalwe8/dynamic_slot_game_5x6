@@ -66,21 +66,20 @@ class SlotGameApp extends ConsumerWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         primarySwatch: Colors.blue,
-        textTheme: GoogleFonts.segoeUiTextTheme(
-          Theme.of(context).textTheme,
-        ),
+        fontFamily: 'Segoe',
         scaffoldBackgroundColor: const Color(0xFF0A0E27),
         appBarTheme: AppBarTheme(
           backgroundColor: const Color(0xFF1a1f3a),
           elevation: 0,
           centerTitle: true,
-          titleTextStyle: GoogleFonts.segoeUi(
+          titleTextStyle: const TextStyle(
+            fontFamily: 'Segoe',
             fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1a1f3a),
           elevation: 8,
           shape: RoundedRectangleBorder(

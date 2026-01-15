@@ -38,8 +38,8 @@ class AuthResponse with _$AuthResponse {
 
 // ==================== Theme Models ====================
 @freezed
-class Theme with _$Theme {
-  const factory Theme({
+class SlotTheme with _$SlotTheme {
+  const factory SlotTheme({
     required String id,
     required String name,
     required String description,
@@ -52,9 +52,9 @@ class Theme with _$Theme {
     String? createdBy,
     required DateTime createdAt,
     DateTime? updatedAt,
-  }) = _Theme;
+  }) = _SlotTheme;
 
-  factory Theme.fromJson(Map<String, dynamic> json) => _$ThemeFromJson(json);
+  factory SlotTheme.fromJson(Map<String, dynamic> json) => _$SlotThemeFromJson(json);
 }
 
 @freezed
@@ -81,8 +81,6 @@ class SpinRequest with _$SpinRequest {
 
   factory SpinRequest.fromJson(Map<String, dynamic> json) =>
       _$SpinRequestFromJson(json);
-
-  Map<String, dynamic> toJson() => _$SpinRequestToJson(this);
 }
 
 @freezed

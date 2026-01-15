@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../game/slot_game.dart';
-import '../models/models.dart';
+import '../models/models.dart' hide Theme;
 
 class GameScreen extends ConsumerStatefulWidget {
   final String themeId;
@@ -13,7 +13,7 @@ class GameScreen extends ConsumerStatefulWidget {
 }
 
 class _GameScreenState extends ConsumerState<GameScreen> {
-  late Theme _currentTheme;
+  late SlotTheme _currentTheme;
   double _selectedBet = 10.0;
   double _balance = 100.0;
 
@@ -25,7 +25,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _loadTheme() {
     // TODO: Fetch theme from API
-    _currentTheme = Theme(
+    _currentTheme = SlotTheme(
       id: widget.themeId,
       name: 'Classic Slots',
       description: 'Traditional slot machine',

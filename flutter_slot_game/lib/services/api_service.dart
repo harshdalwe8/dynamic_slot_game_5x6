@@ -153,16 +153,16 @@ class ApiService {
     return SpinResult.fromJson(response.data);
   }
 
-  Future<List<Theme>> getActiveThemes() async {
+  Future<List<SlotTheme>> getActiveThemes() async {
     final response = await _dio.get('/player/themes/active');
     return (response.data['themes'] as List)
-        .map((e) => Theme.fromJson(e))
+        .map((e) => SlotTheme.fromJson(e))
         .toList();
   }
 
-  Future<Theme> getThemeDetails(String themeId) async {
+  Future<SlotTheme> getThemeDetails(String themeId) async {
     final response = await _dio.get('/player/themes/$themeId');
-    return Theme.fromJson(response.data);
+    return SlotTheme.fromJson(response.data);
   }
 
   Future<List<UserAchievement>> getUserAchievements() async {
@@ -209,14 +209,14 @@ class ApiService {
     return authResponse;
   }
 
-  Future<List<Theme>> getAllThemes() async {
+  Future<List<SlotTheme>> getAllThemes() async {
     final response = await _dio.get('/admin/themes');
     return (response.data['themes'] as List)
-        .map((e) => Theme.fromJson(e))
+        .map((e) => SlotTheme.fromJson(e))
         .toList();
   }
 
-  Future<Theme> createTheme({
+  Future<SlotTheme> createTheme({
     required String name,
     required String description,
     required List<Map<String, dynamic>> symbols,
@@ -235,10 +235,10 @@ class ApiService {
         'rtp': rtp,
       },
     );
-    return Theme.fromJson(response.data);
+    return SlotTheme.fromJson(response.data);
   }
 
-  Future<Theme> updateTheme({
+  Future<SlotTheme> updateTheme({
     required String themeId,
     String? name,
     String? description,
@@ -256,7 +256,7 @@ class ApiService {
         if (rtp != null) 'rtp': rtp,
       },
     );
-    return Theme.fromJson(response.data);
+    return SlotTheme.fromJson(response.data);
   }
 
   Future<RTPReport> getRTPReport(String themeId) async {
@@ -325,7 +325,7 @@ final walletBalanceProvider = FutureProvider<double>((ref) async {
   return apiService.getWalletBalance();
 });
 
-final activeThemesProvider = FutureProvider<List<Theme>>((ref) async {
+final activeThemesProvider = FutureProvider<List<SlotTheme>>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   return apiService.getActiveThemes();
 });
